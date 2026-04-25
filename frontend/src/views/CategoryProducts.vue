@@ -28,6 +28,10 @@
             @click="sortBy = s.value; loadProducts()">
             {{ s.label }}
           </button>
+          <label class="stock-filter">
+            <input v-model="inStockOnly" type="checkbox" @change="page = 1; loadProducts()" />
+            仅看有货
+          </label>
         </div>
 
         <!-- Loading -->
@@ -83,6 +87,7 @@ const page = ref(1)
 const pageSize = 12
 const total = ref(0)
 const loading = ref(true)
+const inStockOnly = ref(false)
 
 const sortOptions = [
   { label: '默认', value: 'default' },
@@ -94,7 +99,14 @@ const sortOptions = [
 const loadProducts = async () => {
   loading.value = true
   try {
-    const res = await getProductList({ page: page.value, size: pageSize, categoryId: categoryId.value })
+    const params = {
+      page: page.value,
+      size: pageSize,
+      categoryId: categoryId.value
+    }
+    if (sortBy.value !== 'default') params.sort = sortBy.value
+    if (inStockOnly.value) params.inStockOnly = true
+    const res = await getProductList(params)
     products.value = res.data.records || res.data
     total.value = res.data.total || products.value.length
   } catch (error) { console.error(error) }
@@ -183,6 +195,17 @@ onMounted(() => {
 }
 .sort-btn:hover { border-color: #111; color: #111; }
 .sort-btn.active { background: #111; color: #fff; border-color: #111; }
+.stock-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 13px;
+  color: #666;
+  cursor: pointer;
+  user-select: none;
+}
+.stock-filter input { accent-color: #111; }
 
 .product-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 

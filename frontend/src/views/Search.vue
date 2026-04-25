@@ -41,6 +41,10 @@
           />
           <button class="price-btn" @click="applyPriceFilter">确定</button>
         </div>
+        <label class="stock-filter">
+          <input v-model="inStockOnly" type="checkbox" @change="applyStockFilter" />
+          仅看有货
+        </label>
 
         <span class="result-count">{{ total }} 件商品</span>
       </div>
@@ -149,6 +153,7 @@ const currentSort = ref('default')
 const sortAsc = ref(false)
 const minPrice = ref(null)
 const maxPrice = ref(null)
+const inStockOnly = ref(false)
 
 const popularTags = ref(['手机', '电脑', '运动鞋', '连衣裙', '零食', '护肤品'])
 const suggestions = ref(['蓝牙耳机', '运动手表', '保温杯'])
@@ -184,6 +189,7 @@ const loadProducts = async () => {
 
     if (minPrice.value) params.minPrice = minPrice.value
     if (maxPrice.value) params.maxPrice = maxPrice.value
+    if (inStockOnly.value) params.inStockOnly = true
 
     const res = await getProductList(params)
     products.value = res.data?.records || res.data || []
@@ -209,6 +215,11 @@ const applyPriceFilter = () => {
   loadProducts()
 }
 
+const applyStockFilter = () => {
+  page.value = 1
+  loadProducts()
+}
+
 const changePage = (p) => {
   page.value = p
   window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -228,6 +239,7 @@ watch(() => route.query.keyword, (val) => {
   currentSort.value = 'default'
   minPrice.value = null
   maxPrice.value = null
+  inStockOnly.value = false
   loadProducts()
 }, { immediate: false })
 
@@ -366,6 +378,20 @@ onMounted(() => {
 .price-btn:hover {
   border-color: #c45c3e;
   color: #c45c3e;
+}
+
+.stock-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #666;
+  cursor: pointer;
+  user-select: none;
+}
+
+.stock-filter input {
+  accent-color: #c45c3e;
 }
 
 .result-count {

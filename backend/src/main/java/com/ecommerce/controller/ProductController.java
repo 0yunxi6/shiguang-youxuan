@@ -23,8 +23,9 @@ public class ProductController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String sort,
             @RequestParam(required = false) BigDecimal minPrice,
-            @RequestParam(required = false) BigDecimal maxPrice) {
-        return Result.success(productService.getProductList(page, size, categoryId, keyword, sort, minPrice, maxPrice));
+            @RequestParam(required = false) BigDecimal maxPrice,
+            @RequestParam(required = false) Boolean inStockOnly) {
+        return Result.success(productService.getProductList(page, size, categoryId, keyword, sort, minPrice, maxPrice, inStockOnly));
     }
 
     @GetMapping("/search")
@@ -35,8 +36,9 @@ public class ProductController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String sort,
             @RequestParam(required = false) BigDecimal minPrice,
-            @RequestParam(required = false) BigDecimal maxPrice) {
-        return getProductList(page, size, categoryId, keyword, sort, minPrice, maxPrice);
+            @RequestParam(required = false) BigDecimal maxPrice,
+            @RequestParam(required = false) Boolean inStockOnly) {
+        return getProductList(page, size, categoryId, keyword, sort, minPrice, maxPrice, inStockOnly);
     }
     
     @GetMapping("/{id}")

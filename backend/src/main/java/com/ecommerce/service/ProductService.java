@@ -37,7 +37,8 @@ public class ProductService {
     private final UserMapper userMapper;
 
     public Page<Product> getProductList(int page, int size, Long categoryId, String keyword,
-                                         String sort, BigDecimal minPrice, BigDecimal maxPrice) {
+                                         String sort, BigDecimal minPrice, BigDecimal maxPrice,
+                                         Boolean inStockOnly) {
         page = Math.max(page, 1);
         size = Math.min(Math.max(size, 1), 60);
         Page<Product> pageParam = new Page<>(page, size);
@@ -76,6 +77,9 @@ public class ProductService {
         if (maxPrice != null && maxPrice.compareTo(BigDecimal.ZERO) >= 0) {
             wrapper.le("price", maxPrice);
         }
+        if (Boolean.TRUE.equals(inStockOnly)) {
+            wrapper.gt("stock", 0);
+        }
 
         // Sorting
         if ("price_asc".equals(sort)) {
@@ -85,7 +89,7 @@ public class ProductService {
         } else if ("newest".equals(sort)) {
             wrapper.orderByDesc("create_time");
         } else if ("sales".equals(sort)) {
-            wrapper.orderByDesc("stock"); // fallback: no sales field yet
+            wrapper.orderByDesc("(SELECT COALESCE(SUM(oi.quantity), 0) FROM order_item oi WHERE oi.product_id = product.id)");
         } else {
             wrapper.orderByDesc("create_time");
         }
