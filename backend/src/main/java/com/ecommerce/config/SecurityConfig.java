@@ -44,7 +44,17 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                .requestMatchers("/auth/**", "/products/**", "/categories/**", "/uploads/**", "/error").permitAll()
+                .requestMatchers(
+                    "/auth/register",
+                    "/auth/login",
+                    "/auth/forgot-password/verify",
+                    "/auth/forgot-password/reset",
+                    "/products/**",
+                    "/categories/**",
+                    "/uploads/**",
+                    "/health",
+                    "/error"
+                ).permitAll()
                 .requestMatchers("/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )

@@ -18,6 +18,7 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -164,10 +165,48 @@ public class ProductService {
         if (rows == null || rows.isEmpty()) {
             return Map.of();
         }
-        return rows.stream().collect(Collectors.toMap(
-                row -> ((Number) row.get("productId")).longValue(),
-                row -> ((Number) row.get("total")).longValue()
-        ));
+        Map<Long, Long> result = new HashMap<>();
+        for (Map<String, Object> row : rows) {
+            Long productId = getLongValue(row, "productId", "product_id");
+            Long total = getLongValue(row, "total");
+            if (productId != null && total != null) {
+                result.merge(productId, total, Long::sum);
+            }
+        }
+        return result;
+    }
+
+    private Long getLongValue(Map<String, Object> row, String... keys) {
+        if (row == null || row.isEmpty()) {
+            return null;
+        }
+        Object value = null;
+        for (String key : keys) {
+            value = row.get(key);
+            if (value != null) {
+                break;
+            }
+            for (Map.Entry<String, Object> entry : row.entrySet()) {
+                if (entry.getKey() != null && entry.getKey().equalsIgnoreCase(key)) {
+                    value = entry.getValue();
+                    break;
+                }
+            }
+            if (value != null) {
+                break;
+            }
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text && StringUtils.hasText(text)) {
+            try {
+                return Long.parseLong(text.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private Set<Long> resolveFavoritedIds(List<Long> productIds) {

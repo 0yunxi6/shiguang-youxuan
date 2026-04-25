@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -54,14 +55,16 @@ class ProductServiceTest {
         category.setName("测试分类");
         when(productMapper.selectById(1L)).thenReturn(product);
         when(categoryMapper.selectBatchIds(anyList())).thenReturn(List.of(category));
-        when(productFavoriteMapper.selectMaps(any())).thenReturn(Collections.emptyList());
-        when(orderItemMapper.selectMaps(any())).thenReturn(Collections.emptyList());
+        when(productFavoriteMapper.selectMaps(any())).thenReturn(List.of(Map.of("product_id", 1L, "total", 2L)));
+        when(orderItemMapper.selectMaps(any())).thenReturn(List.of(Map.of("PRODUCT_ID", 1L, "TOTAL", new BigDecimal("5"))));
 
         Product result = productService.getProductById(1L);
 
         assertNotNull(result);
         assertEquals("测试商品", result.getName());
         assertEquals(new BigDecimal("99.99"), result.getPrice());
+        assertEquals(2L, result.getFavoriteCount());
+        assertEquals(5L, result.getSales());
     }
 
     @Test

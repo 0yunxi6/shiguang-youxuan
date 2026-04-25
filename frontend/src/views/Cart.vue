@@ -171,7 +171,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { getCartList, updateCartItem, deleteCartItem } from '../api'
+import { getCartList, updateCartItem, deleteCartItem, clearCart as clearCartApi } from '../api'
 import { useCartStore } from '../store/cart'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete } from '@element-plus/icons-vue'
@@ -283,7 +283,7 @@ const confirmClear = async () => {
       cartStore.setCartItems(cartList.value)
     } else {
       // 清空全部
-      await Promise.all(cartList.value.map(item => deleteCartItem(item.id)))
+      await clearCartApi()
       cartList.value = []
       cartStore.clearCart()
       ElMessage.success('已清空')

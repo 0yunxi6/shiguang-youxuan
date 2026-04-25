@@ -38,6 +38,7 @@
 - 用户注册、登录、JWT 鉴权
 - 商品列表、分类筛选、搜索、详情
 - 购物车、下单、订单管理
+- 一键清空购物车
 - 商品收藏、商品评价
 - 优惠券管理
 - 个人资料与密码修改
@@ -112,6 +113,7 @@ docker compose up -d --build
 ```text
 前端：http://localhost
 后端：http://localhost:8080/api
+健康检查：http://localhost:8080/api/health
 ```
 
 5. 停止服务：
@@ -151,6 +153,12 @@ mvn spring-boot:run
 
 ```text
 http://localhost:8080/api
+```
+
+健康检查：
+
+```text
+http://localhost:8080/api/health
 ```
 
 ### 3. 启动前端

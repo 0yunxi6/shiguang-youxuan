@@ -143,6 +143,14 @@ public class CartService {
         return Result.success("删除成功");
     }
 
+    public Result<?> clearCart() {
+        User user = getCurrentUser();
+        QueryWrapper<Cart> wrapper = new QueryWrapper<>();
+        wrapper.eq("user_id", user.getId());
+        cartMapper.delete(wrapper);
+        return Result.success("购物车已清空");
+    }
+
     private User getCurrentUser() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         return userMapper.findByUsername(username);
