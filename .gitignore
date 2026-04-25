@@ -1,0 +1,62 @@
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Java
+target/
+*.class
+*.jar
+*.war
+*.log
+
+# Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# Node
+node_modules/
+dist/
+.npm/
+.yarn/
+.npmrc
+.yarnrc
+
+# Environment files - NEVER commit these!
+.env
+.env.local
+.env.*.local
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+~$*
+
+# Docker
+mysql_data/
+redis_data/
+
+# Uploads
+uploads/
+
+# Logs
+*.log
+logs/
+
+# Misc
+*.bak
+*.tmp
+*.temp
+
+# Secrets
+*.pem
+*.key
+credentials.json

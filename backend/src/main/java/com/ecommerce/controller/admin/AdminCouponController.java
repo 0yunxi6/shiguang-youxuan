@@ -1,0 +1,140 @@
+package com.ecommerce.controller.admin;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.ecommerce.entity.User;
+import com.ecommerce.entity.UserCoupon;
+import com.ecommerce.mapper.UserCouponMapper;
+import com.ecommerce.mapper.UserMapper;
+import com.ecommerce.util.Result;
+import lombok.RequiredArgsConstructor;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+@RestController
+@RequestMapping("/admin/coupons")
+@RequiredArgsConstructor
+public class AdminCouponController {
+
+    private final UserCouponMapper userCouponMapper;
+    private final UserMapper userMapper;
+
+    @GetMapping
+    public Result<?> list(@RequestParam(defaultValue = "1") int page,
+                          @RequestParam(defaultValue = "10") int size,
+                          @RequestParam(required = false) Integer status,
+                          @RequestParam(required = false) String keyword) {
+        page = Math.max(page, 1);
+        size = Math.min(Math.max(size, 1), 100);
+
+        Page<UserCoupon> pageParam = new Page<>(page, size);
+        QueryWrapper<UserCoupon> wrapper = new QueryWrapper<>();
+        if (status != null) {
+            wrapper.eq("status", status);
+        }
+        if (StringUtils.hasText(keyword)) {
+            String kw = keyword.trim();
+            List<Long> matchedUserIds = findMatchedUserIds(kw);
+            wrapper.and(w -> {
+                w.like("coupon_code", kw)
+                        .or().like("name", kw)
+                        .or().like("description", kw);
+                if (!matchedUserIds.isEmpty()) {
+                    w.or().in("user_id", matchedUserIds);
+                }
+            });
+        }
+        wrapper.orderByDesc("id");
+
+        Page<UserCoupon> result = userCouponMapper.selectPage(pageParam, wrapper);
+        List<UserCoupon> coupons = result.getRecords();
+        if (coupons.isEmpty()) {
+            return Result.success(buildPageData(result, List.of()));
+        }
+
+        List<Long> userIds = coupons.stream().map(UserCoupon::getUserId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, User> userMap = userMapper.selectBatchIds(userIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+
+        List<Map<String, Object>> records = coupons.stream()
+                .map(coupon -> buildCouponRow(coupon, userMap.get(coupon.getUserId())))
+                .toList();
+        return Result.success(buildPageData(result, records));
+    }
+
+    @DeleteMapping("/{id}")
+    public Result<?> delete(@PathVariable Long id) {
+        UserCoupon coupon = userCouponMapper.selectById(id);
+        if (coupon == null) {
+            return Result.error("优惠券不存在");
+        }
+        userCouponMapper.deleteById(id);
+        return Result.success("优惠券删除成功");
+    }
+
+    private List<Long> findMatchedUserIds(String keyword) {
+        QueryWrapper<User> wrapper = new QueryWrapper<>();
+        wrapper.select("id")
+                .and(w -> w.like("username", keyword)
+                        .or().like("nickname", keyword)
+                        .or().like("email", keyword)
+                        .or().like("phone", keyword));
+        return userMapper.selectList(wrapper).stream().map(User::getId).toList();
+    }
+
+    private Map<String, Object> buildCouponRow(UserCoupon coupon, User user) {
+        Map<String, Object> row = new HashMap<>();
+        row.put("id", coupon.getId());
+        row.put("userId", coupon.getUserId());
+        row.put("username", user == null ? null : user.getUsername());
+        row.put("nickname", user == null ? null : user.getNickname());
+        row.put("email", user == null ? null : user.getEmail());
+        row.put("couponCode", coupon.getCouponCode());
+        row.put("name", coupon.getName());
+        row.put("description", coupon.getDescription());
+        row.put("discountAmount", coupon.getDiscountAmount());
+        row.put("minAmount", coupon.getMinAmount());
+        row.put("status", coupon.getStatus());
+        row.put("statusText", buildStatusText(coupon.getStatus()));
+        row.put("startTime", coupon.getStartTime());
+        row.put("endTime", coupon.getEndTime());
+        row.put("useTime", coupon.getUseTime());
+        row.put("createTime", coupon.getCreateTime());
+        row.put("updateTime", coupon.getUpdateTime());
+        return row;
+    }
+
+    private Map<String, Object> buildPageData(Page<?> page, List<?> records) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("records", records);
+        data.put("total", page.getTotal());
+        data.put("current", page.getCurrent());
+        data.put("size", page.getSize());
+        data.put("pages", page.getPages());
+        return data;
+    }
+
+    private String buildStatusText(Integer status) {
+        if (status == null) {
+            return "未知";
+        }
+        return switch (status) {
+            case 0 -> "未使用";
+            case 1 -> "已使用";
+            case 2 -> "已过期";
+            default -> "未知";
+        };
+    }
+}
