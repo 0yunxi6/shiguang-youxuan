@@ -58,7 +58,12 @@
           <span>ID: {{ item.userId }}</span>
         </div>
         <div class="stars">{{ renderStars(item.rating) }}</div>
-        <div class="content-cell">{{ item.content }}</div>
+        <div class="content-cell">
+          <p>{{ item.content }}</p>
+          <div class="review-thumbs" v-if="parseReviewImages(item.images).length">
+            <img v-for="(img, idx) in parseReviewImages(item.images)" :key="img + idx" :src="img" />
+          </div>
+        </div>
         <div>
           <span class="status-pill" :class="{ hidden: item.status === 0 }">
             {{ item.status === 1 ? '展示中' : '已隐藏' }}
@@ -107,6 +112,15 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize))
 const renderStars = (rating = 0) => {
   const value = Math.max(0, Math.min(5, Number(rating) || 0))
   return '★'.repeat(value) + '☆'.repeat(5 - value)
+}
+
+const parseReviewImages = (value) => {
+  if (!value) return []
+  return String(value)
+    .split(/[\n\r,，]+/)
+    .map(item => item.trim())
+    .filter(Boolean)
+    .slice(0, 6)
 }
 
 const formatTime = (time) => {
@@ -279,6 +293,32 @@ onMounted(loadData)
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+.content-cell {
+  display: block;
+}
+.content-cell p {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.review-thumbs {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.review-thumbs img {
+  width: 42px;
+  height: 42px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #f5f5f5;
+  border: 1px solid #eee;
 }
 .user-cell strong { display: block; color: #333; }
 .user-cell span { color: #aaa; font-size: 12px; }

@@ -12,6 +12,7 @@ public class Product {
     private String name;
     private String description;
     private Long categoryId;
+    private String brand;
     private BigDecimal price;
     private Integer stock;
     private String imageUrl;
@@ -44,6 +45,8 @@ public class Product {
     public void setDescription(String description) { this.description = description; }
     public Long getCategoryId() { return categoryId; }
     public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
+    public String getBrand() { return brand; }
+    public void setBrand(String brand) { this.brand = brand; }
     public BigDecimal getPrice() { return price; }
     public void setPrice(BigDecimal price) { this.price = price; }
     public Integer getStock() { return stock; }

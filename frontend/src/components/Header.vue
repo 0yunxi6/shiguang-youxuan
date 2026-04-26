@@ -4,7 +4,7 @@
       <div class="header-left">
         <div class="logo" @click="$router.push('/')">
           <div class="logo-icon">
-            <span>拾</span>
+            <img src="/logo.png" alt="拾光优选 Logo" />
           </div>
           <span class="logo-text">拾光优选</span>
         </div>
@@ -137,6 +137,7 @@ import { useUserStore } from '../store/user'
 import { useCartStore } from '../store/cart'
 import { useCategoryStore } from '../store/category'
 import { storage } from '../utils/storage'
+import { getHotSearchKeywords } from '../api'
 import { ElMessage } from 'element-plus'
 import {
   Search, ShoppingCart, User, Document, Setting,
@@ -154,9 +155,12 @@ const categoryStore = useCategoryStore()
 const mobileMenuOpen = ref(false)
 const searchFocused = ref(false)
 
-const popularSearches = ref(['手机', '电脑', '运动鞋', '连衣裙', '零食', '护肤品'])
+const DEFAULT_POPULAR_SEARCHES = ['手机', '电脑', '运动鞋', '连衣裙', '零食', '护肤品']
+const SEARCH_HISTORY_KEY = 'searchKeywordHistory'
+const legacyHistory = storage.getJSON('searchHistory', [])
+const popularSearches = ref([...DEFAULT_POPULAR_SEARCHES])
 
-const searchHistory = ref(storage.getJSON('searchHistory', []))
+const searchHistory = ref(storage.getJSON(SEARCH_HISTORY_KEY, legacyHistory))
 
 const isLogin = computed(() => userStore.isLogin)
 const username = computed(() => userStore.userInfo?.username || '用户')
@@ -187,7 +191,7 @@ const addToHistory = (keyword) => {
   const history = searchHistory.value.filter(h => h !== keyword)
   history.unshift(keyword)
   searchHistory.value = history.slice(0, 10)
-  storage.setJSON('searchHistory', searchHistory.value)
+  storage.setJSON(SEARCH_HISTORY_KEY, searchHistory.value)
 }
 
 const searchFromHistory = (keyword) => {
@@ -197,7 +201,24 @@ const searchFromHistory = (keyword) => {
 
 const clearHistory = () => {
   searchHistory.value = []
+  storage.remove(SEARCH_HISTORY_KEY)
   storage.remove('searchHistory')
+}
+
+const normalizeHotKeywords = (items) => (items || [])
+  .map(item => typeof item === 'string' ? item : item?.keyword)
+  .filter(Boolean)
+
+const loadPopularSearches = async () => {
+  try {
+    const res = await getHotSearchKeywords({ limit: 8 })
+    const keywords = normalizeHotKeywords(res.data)
+    if (keywords.length) {
+      popularSearches.value = keywords
+    }
+  } catch (error) {
+    popularSearches.value = [...DEFAULT_POPULAR_SEARCHES]
+  }
 }
 
 const handleCommand = (cmd) => {
@@ -229,6 +250,7 @@ const topCategories = computed(() => categoryStore.categories.slice(0, 5))
 onMounted(async () => {
   window.addEventListener('scroll', onScroll, { passive: true })
   categoryStore.fetchCategories()
+  loadPopularSearches()
 })
 
 onUnmounted(() => window.removeEventListener('scroll', onScroll))
@@ -277,16 +299,23 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
 }
 
 .logo-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  background: #1a1a1a;
-  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: #fff;
+  border: 1px solid #eee;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  font-weight: 700;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+}
+
+.logo-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .logo-text {

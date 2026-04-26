@@ -25,6 +25,14 @@
       <div class="filter-right">
         <div class="price-range">
           <input
+            v-model.trim="brand"
+            type="text"
+            placeholder="品牌"
+            class="price-input brand-input"
+            @keyup.enter="applyBrandFilter"
+            @change="applyBrandFilter"
+          />
+          <input
             v-model.number="minPrice"
             type="number"
             placeholder="最低价"
@@ -62,6 +70,20 @@
         >
           {{ tag }}
         </button>
+      </div>
+    </div>
+    <div class="popular-tags" v-if="searchHistory.length && !keyword">
+      <span class="tags-label">最近搜索：</span>
+      <div class="tags-list">
+        <button
+          v-for="tag in searchHistory"
+          :key="tag"
+          class="tag-btn"
+          @click="searchByTag(tag)"
+        >
+          {{ tag }}
+        </button>
+        <button class="tag-btn muted" @click="clearSearchHistory">清空</button>
       </div>
     </div>
 
@@ -132,9 +154,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getProductList } from '../api'
+import { getHotSearchKeywords, getProductList, getSearchSuggestions } from '../api'
 import { useAddToCart } from '../composables/useAddToCart'
 import { useVisiblePages } from '../composables/usePagination'
 import ProductCard from '../components/ProductCard.vue'
@@ -154,9 +176,13 @@ const sortAsc = ref(false)
 const minPrice = ref(null)
 const maxPrice = ref(null)
 const inStockOnly = ref(false)
+const brand = ref('')
+const searchHistory = ref([])
+const SEARCH_HISTORY_KEY = 'searchKeywordHistory'
 
-const popularTags = ref(['手机', '电脑', '运动鞋', '连衣裙', '零食', '护肤品'])
-const suggestions = ref(['蓝牙耳机', '运动手表', '保温杯'])
+const DEFAULT_POPULAR_TAGS = ['手机', '电脑', '运动鞋', '连衣裙', '零食', '护肤品']
+const popularTags = ref([...DEFAULT_POPULAR_TAGS])
+const suggestions = ref([])
 
 const sortTabs = computed(() => [
   { label: '综合推荐', value: 'default', asc: false },
@@ -193,6 +219,7 @@ const hydrateFromQuery = () => {
   minPrice.value = parseQueryNumber(route.query.minPrice)
   maxPrice.value = parseQueryNumber(route.query.maxPrice)
   inStockOnly.value = firstQueryValue(route.query.inStockOnly) === 'true'
+  brand.value = firstQueryValue(route.query.brand) || ''
 }
 
 const buildRouteQuery = () => {
@@ -205,10 +232,42 @@ const buildRouteQuery = () => {
   if (hasPriceValue(minPrice.value)) query.minPrice = String(minPrice.value)
   if (hasPriceValue(maxPrice.value)) query.maxPrice = String(maxPrice.value)
   if (inStockOnly.value) query.inStockOnly = 'true'
+  if (brand.value) query.brand = brand.value
   return query
 }
 
 const isSameQuery = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+
+const normalizeKeywordItems = (items) => (items || [])
+  .map(item => typeof item === 'string' ? item : item?.keyword)
+  .filter(Boolean)
+
+const loadPopularTags = async () => {
+  try {
+    const res = await getHotSearchKeywords({ limit: 10 })
+    const tags = normalizeKeywordItems(res.data)
+    popularTags.value = tags.length ? tags : [...DEFAULT_POPULAR_TAGS]
+  } catch (error) {
+    popularTags.value = [...DEFAULT_POPULAR_TAGS]
+  }
+}
+
+const loadSuggestions = async () => {
+  const text = keyword.value.trim()
+  if (!text) {
+    suggestions.value = []
+    return
+  }
+  try {
+    const res = await getSearchSuggestions({ keyword: text, limit: 6 })
+    const list = normalizeKeywordItems(res.data).filter(item => item !== text)
+    suggestions.value = list.length
+      ? list
+      : popularTags.value.filter(item => item !== text).slice(0, 6)
+  } catch (error) {
+    suggestions.value = popularTags.value.filter(item => item !== text).slice(0, 6)
+  }
+}
 
 const syncQueryAndLoad = () => {
   const nextQuery = buildRouteQuery()
@@ -242,15 +301,42 @@ const loadProducts = async () => {
     if (hasPriceValue(minPrice.value)) params.minPrice = minPrice.value
     if (hasPriceValue(maxPrice.value)) params.maxPrice = maxPrice.value
     if (inStockOnly.value) params.inStockOnly = true
+    if (brand.value) params.brand = brand.value
 
     const res = await getProductList(params)
     products.value = res.data?.records || res.data || []
     total.value = res.data?.total || products.value.length
+    if (!products.value.length && keyword.value) {
+      await loadSuggestions()
+    } else {
+      suggestions.value = []
+    }
   } catch (error) {
     console.error(error)
   } finally {
     loading.value = false
   }
+}
+
+const loadSearchHistory = () => {
+  try {
+    searchHistory.value = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]').slice(0, 8)
+  } catch (error) {
+    searchHistory.value = []
+  }
+}
+
+const saveSearchHistory = (kw) => {
+  const text = String(kw || '').trim()
+  if (!text) return
+  const next = [text, ...searchHistory.value.filter(item => item !== text)].slice(0, 8)
+  searchHistory.value = next
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(next))
+}
+
+const clearSearchHistory = () => {
+  searchHistory.value = []
+  localStorage.removeItem(SEARCH_HISTORY_KEY)
 }
 
 const changeSort = (sort) => {
@@ -272,6 +358,11 @@ const applyStockFilter = () => {
   syncQueryAndLoad()
 }
 
+const applyBrandFilter = () => {
+  page.value = 1
+  syncQueryAndLoad()
+}
+
 const changePage = (p) => {
   page.value = p
   window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -284,9 +375,12 @@ const searchByTag = (tag) => {
   router.push({ path: '/search', query: { keyword: tag } })
 }
 
+onMounted(loadPopularTags)
 
 watch(() => route.query, () => {
   hydrateFromQuery()
+  loadSearchHistory()
+  saveSearchHistory(keyword.value)
   loadProducts()
 }, { immediate: true, deep: true })
 </script>
@@ -394,6 +488,10 @@ watch(() => route.query, () => {
   transition: border-color 0.2s;
 }
 
+.brand-input {
+  width: 110px;
+}
+
 .price-input:focus {
   border-color: #c45c3e;
 }
@@ -477,6 +575,10 @@ watch(() => route.query, () => {
   border-color: #c45c3e;
   color: #c45c3e;
   background: #fafbff;
+}
+
+.tag-btn.muted {
+  color: #999;
 }
 
 /* ===== Products ===== */

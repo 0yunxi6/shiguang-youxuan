@@ -4,11 +4,13 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ecommerce.entity.Category;
 import com.ecommerce.entity.Product;
+import com.ecommerce.entity.SearchLog;
 import com.ecommerce.entity.User;
 import com.ecommerce.mapper.CategoryMapper;
 import com.ecommerce.mapper.OrderItemMapper;
 import com.ecommerce.mapper.ProductFavoriteMapper;
 import com.ecommerce.mapper.ProductMapper;
+import com.ecommerce.mapper.SearchLogMapper;
 import com.ecommerce.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -24,7 +26,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,12 +36,17 @@ public class ProductService {
     private final ProductFavoriteMapper productFavoriteMapper;
     private final OrderItemMapper orderItemMapper;
     private final UserMapper userMapper;
+    private final SearchLogMapper searchLogMapper;
 
     public Page<Product> getProductList(int page, int size, Long categoryId, String keyword,
                                          String sort, BigDecimal minPrice, BigDecimal maxPrice,
-                                         Boolean inStockOnly) {
+                                         Boolean inStockOnly, String brand) {
         page = Math.max(page, 1);
         size = Math.min(Math.max(size, 1), 60);
+        String normalizedKeyword = normalizeSearchKeyword(keyword);
+        if (page == 1 && StringUtils.hasText(normalizedKeyword)) {
+            recordSearchKeyword(normalizedKeyword);
+        }
         Page<Product> pageParam = new Page<>(page, size);
         QueryWrapper<Product> wrapper = new QueryWrapper<>();
         wrapper.eq("status", 1);
@@ -48,9 +54,12 @@ public class ProductService {
         if (categoryId != null) {
             wrapper.eq("category_id", categoryId);
         }
+        if (StringUtils.hasText(brand)) {
+            wrapper.like("brand", brand.trim());
+        }
 
-        if (keyword != null && !keyword.trim().isEmpty()) {
-            String kw = keyword.trim();
+        if (StringUtils.hasText(normalizedKeyword)) {
+            String kw = normalizedKeyword;
             // Find categories matching the keyword
             QueryWrapper<Category> catWrapper = new QueryWrapper<>();
             catWrapper.like("name", kw);
@@ -58,7 +67,7 @@ public class ProductService {
                     .stream().map(Category::getId).collect(Collectors.toList());
 
             wrapper.and(w -> {
-                w.like("name", kw).or().like("description", kw);
+                w.like("name", kw).or().like("description", kw).or().like("brand", kw);
                 if (!matchedCatIds.isEmpty()) {
                     w.or().in("category_id", matchedCatIds);
                 }
@@ -152,6 +161,71 @@ public class ProductService {
         List<Product> products = productMapper.findByCategoryId(categoryId);
         enrichProducts(products);
         return products;
+    }
+
+    public List<Map<String, Object>> getHotSearchKeywords(int limit) {
+        int safeLimit = Math.min(Math.max(limit, 1), 20);
+        try {
+            QueryWrapper<SearchLog> wrapper = new QueryWrapper<>();
+            wrapper.select("keyword", "search_count")
+                    .orderByDesc("search_count")
+                    .orderByDesc("last_search_time")
+                    .last("LIMIT " + safeLimit);
+            return searchLogMapper.selectList(wrapper).stream()
+                    .filter(item -> StringUtils.hasText(item.getKeyword()))
+                    .map(item -> {
+                        Map<String, Object> row = new HashMap<>();
+                        row.put("keyword", item.getKeyword());
+                        row.put("count", item.getSearchCount() == null ? 0 : item.getSearchCount());
+                        return row;
+                    })
+                    .toList();
+        } catch (RuntimeException ignored) {
+            return List.of();
+        }
+    }
+
+    public List<String> getSearchSuggestions(String keyword, int limit) {
+        int safeLimit = Math.min(Math.max(limit, 1), 12);
+        String kw = normalizeSearchKeyword(keyword);
+        LinkedHashSet<String> suggestions = new LinkedHashSet<>();
+
+        if (StringUtils.hasText(kw)) {
+            QueryWrapper<Product> productWrapper = new QueryWrapper<>();
+            productWrapper.select("name", "brand")
+                    .eq("status", 1)
+                    .and(w -> w.like("name", kw).or().like("brand", kw))
+                    .orderByDesc("create_time")
+                    .last("LIMIT " + (safeLimit * 2));
+            for (Product product : productMapper.selectList(productWrapper)) {
+                addSuggestion(suggestions, product.getBrand(), kw);
+                addSuggestion(suggestions, product.getName(), kw);
+                if (suggestions.size() >= safeLimit) {
+                    break;
+                }
+            }
+
+            if (suggestions.size() < safeLimit) {
+                for (Map<String, Object> row : getHotSearchKeywords(safeLimit * 2)) {
+                    Object value = row.get("keyword");
+                    if (value instanceof String text) {
+                        addSuggestion(suggestions, text, kw);
+                    }
+                    if (suggestions.size() >= safeLimit) {
+                        break;
+                    }
+                }
+            }
+        } else {
+            for (Map<String, Object> row : getHotSearchKeywords(safeLimit)) {
+                Object value = row.get("keyword");
+                if (value instanceof String text && StringUtils.hasText(text)) {
+                    suggestions.add(text.trim());
+                }
+            }
+        }
+
+        return suggestions.stream().limit(safeLimit).toList();
     }
 
     private void enrichProducts(List<Product> products) {
@@ -279,6 +353,36 @@ public class ProductService {
             normalized.add(imageUrl.trim());
         }
         return List.copyOf(normalized);
+    }
+
+    private String normalizeSearchKeyword(String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            return null;
+        }
+        String normalized = keyword.trim().replaceAll("\\s+", " ");
+        return normalized.length() > 50 ? normalized.substring(0, 50) : normalized;
+    }
+
+    private void recordSearchKeyword(String keyword) {
+        try {
+            searchLogMapper.upsertKeyword(keyword);
+        } catch (RuntimeException ignored) {
+            // Search logging is non-critical; product search should not fail because statistics failed.
+        }
+    }
+
+    private void addSuggestion(Set<String> suggestions, String value, String keyword) {
+        if (!StringUtils.hasText(value) || !containsIgnoreCase(value, keyword)) {
+            return;
+        }
+        suggestions.add(value.trim());
+    }
+
+    private boolean containsIgnoreCase(String source, String target) {
+        if (!StringUtils.hasText(source) || !StringUtils.hasText(target)) {
+            return false;
+        }
+        return source.toLowerCase().contains(target.toLowerCase());
     }
 
     private Long getCurrentUserId() {

@@ -58,9 +58,14 @@
           </div>
 
           <transition-group name="cart-item" tag="div" class="cart-list">
-            <div v-for="item in cartList" :key="item.id" class="cart-item" :class="{ selected: selectedItems.includes(item.id) }">
+            <div
+              v-for="item in cartList"
+              :key="item.id"
+              class="cart-item"
+              :class="{ selected: selectedItems.includes(item.id), unavailable: !item.available }"
+            >
               <label class="item-select">
-                <input type="checkbox" v-model="selectedItems" :value="item.id" />
+                <input type="checkbox" v-model="selectedItems" :value="item.id" :disabled="!item.available" />
                 <span class="checkmark"></span>
               </label>
 
@@ -75,6 +80,7 @@
                   {{ item.productName }}
                 </h3>
                 <p class="item-desc">{{ item.description || '暂无描述' }}</p>
+                <p class="invalid-tip" v-if="!item.available">商品已下架、售罄或库存不足，请调整后再结算</p>
               </div>
 
               <div class="item-price">
@@ -188,14 +194,18 @@ const suggestedLinks = [
 ]
 
 const selectAll = computed({
-  get: () => cartList.value.length > 0 && selectedItems.value.length === cartList.value.length,
+  get: () => availableCartItems.value.length > 0 && selectedItems.value.length === availableCartItems.value.length,
   set: (val) => {
-    selectedItems.value = val ? cartList.value.map(i => i.id) : []
+    selectedItems.value = val ? availableCartItems.value.map(i => i.id) : []
   }
 })
 
+const availableCartItems = computed(() =>
+  cartList.value.filter(item => item.available)
+)
+
 const selectedCartItems = computed(() =>
-  cartList.value.filter(item => selectedItems.value.includes(item.id))
+  availableCartItems.value.filter(item => selectedItems.value.includes(item.id))
 )
 
 const totalPrice = computed(() =>
@@ -225,7 +235,8 @@ const loadCart = async () => {
     const res = await getCartList()
     cartList.value = res.data.map(item => ({
       ...item,
-      stock: item.stock ?? 0
+      stock: item.stock ?? 0,
+      available: item.available !== false
     }))
     cartStore.setCartItems(cartList.value)
   } catch (e) {
@@ -298,13 +309,18 @@ const goToCheckout = () => {
     ElMessage.warning('请选择要结算的商品')
     return
   }
+  if (selectedCartItems.value.length !== selectedItems.value.length) {
+    ElMessage.warning('存在失效商品，请重新选择')
+    selectedItems.value = selectedCartItems.value.map(item => item.id)
+    return
+  }
   router.push({ path: '/checkout', query: { items: selectedItems.value.join(',') } })
 }
 
 watch(cartList, (newList) => {
   // 清理已删除的选中项
   selectedItems.value = selectedItems.value.filter(id =>
-    newList.some(item => item.id === id)
+    newList.some(item => item.id === id && item.available)
   )
 }, { deep: true })
 
@@ -393,6 +409,13 @@ onMounted(() => {
   border-color: #c45c3e;
 }
 
+.select-all input:disabled + .checkmark,
+.item-select input:disabled + .checkmark {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  cursor: not-allowed;
+}
+
 .select-all input:checked + .checkmark::after {
   content: '✓';
   color: #fff;
@@ -452,6 +475,11 @@ onMounted(() => {
 
 .cart-item.selected {
   background: #f9f7ff;
+}
+
+.cart-item.unavailable {
+  opacity: 0.62;
+  background: #fafafa;
 }
 
 .item-select {
@@ -531,6 +559,12 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.invalid-tip {
+  margin: 6px 0 0;
+  color: #f56c6c;
+  font-size: 12px;
 }
 
 .item-price {

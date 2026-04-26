@@ -27,6 +27,7 @@ public class AdminProductController {
                           @RequestParam(defaultValue = "10") int size,
                           @RequestParam(required = false) String keyword,
                           @RequestParam(required = false) Long categoryId,
+                          @RequestParam(required = false) String brand,
                           @RequestParam(required = false) Integer status,
                           @RequestParam(defaultValue = "false") Boolean lowStockOnly,
                           @RequestParam(defaultValue = "10") Integer maxStock) {
@@ -43,6 +44,9 @@ public class AdminProductController {
         }
         if (categoryId != null) {
             wrapper.eq("category_id", categoryId);
+        }
+        if (StringUtils.hasText(brand)) {
+            wrapper.like("brand", brand.trim());
         }
         if (status != null) {
             wrapper.eq("status", status);
@@ -127,12 +131,16 @@ public class AdminProductController {
             return Result.error("商品信息不能为空");
         }
         product.setName(StringUtils.hasText(product.getName()) ? product.getName().trim() : null);
+        product.setBrand(StringUtils.hasText(product.getBrand()) ? product.getBrand().trim() : null);
         product.setDescription(StringUtils.hasText(product.getDescription()) ? product.getDescription().trim() : null);
         if (!StringUtils.hasText(product.getName())) {
             return Result.error("商品名称不能为空");
         }
         if (product.getName().length() > 100) {
             return Result.error("商品名称不能超过100个字符");
+        }
+        if (product.getBrand() != null && product.getBrand().length() > 100) {
+            return Result.error("品牌名称不能超过100个字符");
         }
         if (product.getCategoryId() == null || product.getCategoryId() <= 0) {
             return Result.error("请选择商品分类");

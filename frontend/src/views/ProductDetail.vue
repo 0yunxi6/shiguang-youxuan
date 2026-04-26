@@ -97,6 +97,10 @@
         </div>
 
         <div class="meta-row">
+          <div class="meta-item" v-if="product.brand">
+            <span class="meta-label">品牌</span>
+            <span class="meta-value">{{ product.brand }}</span>
+          </div>
           <div class="meta-item">
             <span class="meta-label">库存</span>
             <span class="meta-value" :class="{ 'low-stock': product.stock <= 10 }">
@@ -187,6 +191,20 @@
           <span>{{ reviewForm.rating }} 星</span>
         </div>
         <textarea v-model.trim="reviewForm.content" maxlength="500" placeholder="说说包装、质感、使用体验，5个字以上即可"></textarea>
+        <textarea
+          v-model.trim="reviewForm.images"
+          class="review-image-input"
+          maxlength="1000"
+          placeholder="可选：粘贴评价图片链接，多个链接请换行或用逗号分隔"
+        ></textarea>
+        <div class="review-image-preview" v-if="reviewFormImageList.length">
+          <img
+            v-for="(img, idx) in reviewFormImageList"
+            :key="img + idx"
+            :src="img"
+            @click="openPreview(idx, reviewFormImageList)"
+          />
+        </div>
         <div class="form-bottom">
           <span>{{ reviewForm.content.length }}/500</span>
           <button class="submit-review" :disabled="reviewSubmitting" @click="submitReview">
@@ -210,6 +228,14 @@
           </div>
           <div class="review-rating">{{ renderStars(item.rating) }}</div>
           <p class="review-content">{{ item.content }}</p>
+          <div class="review-images" v-if="parseReviewImages(item.images).length">
+            <img
+              v-for="(img, idx) in parseReviewImages(item.images)"
+              :key="img + idx"
+              :src="img"
+              @click="openPreview(idx, parseReviewImages(item.images))"
+            />
+          </div>
         </div>
       </div>
 
@@ -243,15 +269,15 @@
         <button class="preview-close" @click="previewVisible = false">
           <el-icon :size="24"><Close /></el-icon>
         </button>
-        <button class="preview-nav prev" @click="prevImage" v-if="images.length > 1">
+        <button class="preview-nav prev" @click="prevImage" v-if="activePreviewImages.length > 1">
           <el-icon :size="24"><ArrowLeft /></el-icon>
         </button>
-        <img :src="images[previewIndex]" class="preview-image" @click.stop />
-        <button class="preview-nav next" @click="nextImage" v-if="images.length > 1">
+        <img :src="activePreviewImages[previewIndex]" class="preview-image" @click.stop />
+        <button class="preview-nav next" @click="nextImage" v-if="activePreviewImages.length > 1">
           <el-icon :size="24"><ArrowRight /></el-icon>
         </button>
-        <div class="preview-info" v-if="images.length > 1">
-          {{ previewIndex + 1 }} / {{ images.length }}
+        <div class="preview-info" v-if="activePreviewImages.length > 1">
+          {{ previewIndex + 1 }} / {{ activePreviewImages.length }}
         </div>
       </div>
     </Teleport>
@@ -316,6 +342,7 @@ const isFavorited = ref(false)
 const currentImageIndex = ref(0)
 const previewVisible = ref(false)
 const previewIndex = ref(0)
+const previewImages = ref([])
 const showFloatingBar = ref(false)
 const relatedProducts = ref([])
 const reviews = ref([])
@@ -328,7 +355,8 @@ const reviewSubmitting = ref(false)
 const ratingFilter = ref(null)
 const reviewForm = reactive({
   rating: 5,
-  content: ''
+  content: '',
+  images: ''
 })
 
 const images = computed(() => {
@@ -344,6 +372,9 @@ const images = computed(() => {
 const currentImage = computed(() => {
   return images.value[currentImageIndex.value] || product.value?.imageUrl || '/placeholder.svg'
 })
+
+const activePreviewImages = computed(() => previewImages.value.length ? previewImages.value : images.value)
+const reviewFormImageList = computed(() => parseReviewImages(reviewForm.images))
 
 const promo = ref({
   text: '满99减10，领取优惠券',
@@ -396,6 +427,7 @@ const loadProduct = async () => {
     ratingFilter.value = null
     reviewForm.rating = 5
     reviewForm.content = ''
+    reviewForm.images = ''
 
     // Load related products
     if (product.value?.categoryId) {
@@ -466,6 +498,15 @@ const loadReviews = async (reset = false) => {
   }
 }
 
+const parseReviewImages = (value) => {
+  if (!value) return []
+  return String(value)
+    .split(/[\n\r,，]+/)
+    .map(item => item.trim())
+    .filter(Boolean)
+    .slice(0, 6)
+}
+
 const changeRatingFilter = (rating) => {
   ratingFilter.value = rating
   loadReviews(true)
@@ -491,11 +532,13 @@ const submitReview = async () => {
     await createProductReview({
       productId: product.value.id,
       rating: reviewForm.rating,
-      content: reviewForm.content
+      content: reviewForm.content,
+      images: parseReviewImages(reviewForm.images).join(',')
     })
     ElMessage.success('评价发布成功')
     reviewForm.rating = 5
     reviewForm.content = ''
+    reviewForm.images = ''
     await Promise.all([loadReviewSummary(), loadReviews(true)])
   } finally {
     reviewSubmitting.value = false
@@ -507,17 +550,18 @@ const formatReviewTime = (time) => {
   return new Date(time).toLocaleDateString('zh-CN')
 }
 
-const openPreview = (index) => {
+const openPreview = (index, list = images.value) => {
+  previewImages.value = Array.isArray(list) && list.length ? list : images.value
   previewIndex.value = index
   previewVisible.value = true
 }
 
 const prevImage = () => {
-  previewIndex.value = previewIndex.value > 0 ? previewIndex.value - 1 : images.value.length - 1
+  previewIndex.value = previewIndex.value > 0 ? previewIndex.value - 1 : activePreviewImages.value.length - 1
 }
 
 const nextImage = () => {
-  previewIndex.value = previewIndex.value < images.value.length - 1 ? previewIndex.value + 1 : 0
+  previewIndex.value = previewIndex.value < activePreviewImages.value.length - 1 ? previewIndex.value + 1 : 0
 }
 
 const toggleFavorite = () => {
@@ -1184,9 +1228,34 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
+.review-form textarea.review-image-input {
+  min-height: 56px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
 .review-form textarea:focus {
   border-color: #c45c3e;
   box-shadow: 0 0 0 3px rgba(196, 92, 62, 0.08);
+}
+
+.review-image-preview,
+.review-images {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.review-image-preview img,
+.review-images img {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #f5f5f5;
+  cursor: pointer;
+  border: 1px solid #eee6dc;
 }
 
 .form-bottom {

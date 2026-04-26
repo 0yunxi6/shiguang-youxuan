@@ -25,8 +25,9 @@ public class ProductController {
             @RequestParam(required = false) String sort,
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
-            @RequestParam(required = false) Boolean inStockOnly) {
-        return Result.success(productService.getProductList(page, size, categoryId, keyword, sort, minPrice, maxPrice, inStockOnly));
+            @RequestParam(required = false) Boolean inStockOnly,
+            @RequestParam(required = false) String brand) {
+        return Result.success(productService.getProductList(page, size, categoryId, keyword, sort, minPrice, maxPrice, inStockOnly, brand));
     }
 
     @GetMapping("/search")
@@ -38,8 +39,20 @@ public class ProductController {
             @RequestParam(required = false) String sort,
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
-            @RequestParam(required = false) Boolean inStockOnly) {
-        return getProductList(page, size, categoryId, keyword, sort, minPrice, maxPrice, inStockOnly);
+            @RequestParam(required = false) Boolean inStockOnly,
+            @RequestParam(required = false) String brand) {
+        return getProductList(page, size, categoryId, keyword, sort, minPrice, maxPrice, inStockOnly, brand);
+    }
+
+    @GetMapping("/search/hot")
+    public Result<?> getHotSearchKeywords(@RequestParam(defaultValue = "10") int limit) {
+        return Result.success(productService.getHotSearchKeywords(limit));
+    }
+
+    @GetMapping("/search/suggestions")
+    public Result<?> getSearchSuggestions(@RequestParam(required = false) String keyword,
+                                          @RequestParam(defaultValue = "8") int limit) {
+        return Result.success(productService.getSearchSuggestions(keyword, limit));
     }
 
     @GetMapping("/{id}/recommendations")

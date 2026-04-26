@@ -2,7 +2,7 @@
   <div class="admin-layout">
     <aside class="admin-aside" :class="{ collapsed: isCollapse }">
       <div class="logo-section" @click="$router.push('/admin/dashboard')">
-        <div class="logo-icon"><span>拾</span></div>
+        <div class="logo-icon"><img src="/logo.png" alt="拾光优选 Logo" /></div>
         <transition name="fade">
           <span v-if="!isCollapse" class="logo-text">拾光优选</span>
         </transition>
@@ -131,10 +131,14 @@ onUnmounted(() => document.removeEventListener('click', closeDropdownOnClickOuts
   box-sizing: border-box;
 }
 .logo-icon {
-  width: 32px; height: 32px; border-radius: 6px;
-  background: #fff; color: #1a1a1a;
+  width: 34px; height: 34px; border-radius: 8px;
+  background: #fff; border: 1px solid rgba(255,255,255,0.14);
   display: flex; align-items: center; justify-content: center;
-  font-size: 14px; font-weight: 800; flex-shrink: 0;
+  overflow: hidden; flex-shrink: 0;
+}
+.logo-icon img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
 }
 .logo-text { font-size: 15px; font-weight: 700; color: #fff; white-space: nowrap; }
 

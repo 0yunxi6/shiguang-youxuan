@@ -24,6 +24,12 @@
         <option :value="null">全部分类</option>
         <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
       </select>
+      <input
+        v-model="brandFilter"
+        placeholder="品牌筛选"
+        class="filter-input compact"
+        @keyup.enter="applyFilters"
+      />
       <select v-model="statusFilter" class="filter-select" @change="applyFilters">
         <option :value="null">全部状态</option>
         <option :value="1">上架</option>
@@ -55,6 +61,7 @@
             <th style="width:60px">ID</th>
             <th style="width:80px">图片</th>
             <th>商品名称</th>
+            <th style="width:100px">品牌</th>
             <th style="width:100px">价格</th>
             <th style="width:80px">库存</th>
             <th style="width:80px">状态</th>
@@ -81,6 +88,7 @@
               <span class="product-name">{{ row.name }}</span>
               <span class="product-desc" v-if="row.description">{{ row.description }}</span>
             </td>
+            <td>{{ row.brand || '—' }}</td>
             <td class="price">¥{{ row.price }}</td>
             <td>
               <span class="stock" :class="{ low: row.stock < 10 }">
@@ -146,6 +154,9 @@
           <el-select v-model="form.categoryId" placeholder="选择分类" style="width: 100%">
             <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="品牌">
+          <el-input v-model="form.brand" placeholder="请输入品牌，如 Apple / 华为 / Nike" maxlength="100" show-word-limit />
         </el-form-item>
         <div class="form-row">
           <el-form-item label="价格" prop="price" class="half">
@@ -249,6 +260,7 @@ const dialogVisible = ref(false)
 const isEdit = ref(false)
 const keyword = ref('')
 const categoryId = ref(null)
+const brandFilter = ref('')
 const statusFilter = ref(null)
 const lowStockOnly = ref(false)
 const page = ref(1)
@@ -269,6 +281,7 @@ const form = reactive({
   id: null,
   name: '',
   categoryId: null,
+  brand: '',
   price: 0,
   stock: 0,
   imageUrl: '',
@@ -302,6 +315,7 @@ const loadProducts = async () => {
         size: pageSize,
         keyword: keyword.value,
         categoryId: categoryId.value,
+        brand: brandFilter.value,
         status: statusFilter.value,
         lowStockOnly: lowStockOnly.value,
         maxStock: 10
@@ -343,6 +357,7 @@ const openDialog = (row) => {
       id: null,
       name: '',
       categoryId: null,
+      brand: '',
       price: 0,
       stock: 0,
       imageUrl: '',
@@ -439,11 +454,12 @@ const downloadCsv = (filename, rows) => {
 
 const exportProducts = () => {
   const rows = [
-    ['ID', '商品名称', '分类', '价格', '库存', '状态', '图片'],
+    ['ID', '商品名称', '分类', '品牌', '价格', '库存', '状态', '图片'],
     ...products.value.map(row => [
       row.id,
       row.name,
       categories.value.find(c => c.id === row.categoryId)?.name || row.categoryName || '',
+      row.brand || '',
       row.price,
       row.stock,
       row.status === 1 ? '上架' : '下架',
@@ -587,6 +603,11 @@ onMounted(() => {
 .filter-input:focus {
   border-color: #333;
   box-shadow: 0 0 0 3px rgba(196, 92, 62, 0.1);
+}
+
+.filter-input.compact {
+  width: 150px;
+  padding-left: 14px;
 }
 
 .filter-select {

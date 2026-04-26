@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS `product` (
   `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
   `name` VARCHAR(200) NOT NULL,
   `category_id` BIGINT,
+  `brand` VARCHAR(100),
   `price` DECIMAL(10,2) NOT NULL,
   `stock` INT DEFAULT 0,
   `description` TEXT,
@@ -169,6 +170,18 @@ CREATE TABLE IF NOT EXISTS `product_favorite` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 用户优惠券表
+-- Search keyword statistics
+CREATE TABLE IF NOT EXISTS `search_log` (
+  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+  `keyword` VARCHAR(100) NOT NULL,
+  `search_count` INT DEFAULT 1,
+  `last_search_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uk_search_keyword` (`keyword`),
+  KEY `idx_search_count_time` (`search_count`, `last_search_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `user_coupon` (
   `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
   `user_id` BIGINT NOT NULL,

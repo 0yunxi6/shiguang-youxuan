@@ -141,6 +141,9 @@
         <div class="coupon-section">
           <div class="section-subtitle">
             <span>优惠券</span>
+            <small v-if="autoCouponApplied && selectedCoupon" class="auto-coupon-tip">
+              已自动选择最优券：省 ¥{{ discount }}
+            </small>
           </div>
           <div class="coupon-list">
             <div
@@ -163,7 +166,7 @@
                 <el-icon><Check /></el-icon>
               </div>
             </div>
-            <div class="coupon-item no-coupon" @click="selectedCoupon = null">
+            <div class="coupon-item no-coupon" @click="clearSelectedCoupon">
               <span>不使用优惠券</span>
               <div class="coupon-check" :class="{ selected: !selectedCoupon }">
                 <el-icon><Check /></el-icon>
@@ -334,6 +337,7 @@ const addressForm = reactive({
 // Coupon
 const availableCoupons = ref([])
 const selectedCoupon = ref(null)
+const autoCouponApplied = ref(false)
 
 // Payment
 const paymentMethods = ref([
@@ -442,6 +446,15 @@ const loadCoupons = async () => {
     if (selectedCoupon.value) {
       selectedCoupon.value = availableCoupons.value.find(coupon => coupon.id === selectedCoupon.value.id && coupon.canUse) || null
     }
+    if (!selectedCoupon.value) {
+      const bestCoupon = availableCoupons.value
+        .filter(coupon => coupon.canUse)
+        .sort((a, b) => b.value - a.value)[0]
+      if (bestCoupon) {
+        selectedCoupon.value = bestCoupon
+        autoCouponApplied.value = true
+      }
+    }
   } catch (error) {
     availableCoupons.value = []
   }
@@ -508,6 +521,12 @@ const selectCoupon = (coupon) => {
   } else {
     selectedCoupon.value = coupon
   }
+  autoCouponApplied.value = false
+}
+
+const clearSelectedCoupon = () => {
+  selectedCoupon.value = null
+  autoCouponApplied.value = false
 }
 
 const submitOrder = async () => {
@@ -672,6 +691,11 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 600;
   color: #333;
+}
+
+.auto-coupon-tip {
+  color: #67c23a;
+  font-size: 13px;
 }
 
 /* ===== Order Items ===== */

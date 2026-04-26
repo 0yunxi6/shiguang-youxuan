@@ -18,10 +18,12 @@ public class CommerceFeatureTableInitializer {
     public CommandLineRunner ensureCommerceFeatureTables(DataSource dataSource) {
         return args -> {
             try (Connection connection = dataSource.getConnection();
-                 Statement statement = connection.createStatement()) {
+                Statement statement = connection.createStatement()) {
                 ensureProductImagesColumn(connection, statement);
+                ensureProductBrandColumn(connection, statement);
                 ensureOrdersColumns(connection, statement);
                 ensureUserAddressTable(statement);
+                ensureSearchLogTable(statement);
                 statement.execute("""
                         CREATE TABLE IF NOT EXISTS `product_favorite` (
                           `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -67,6 +69,12 @@ public class CommerceFeatureTableInitializer {
         }
     }
 
+    private void ensureProductBrandColumn(Connection connection, Statement statement) throws SQLException {
+        if (!columnExists(connection, "product", "brand")) {
+            statement.execute("ALTER TABLE `product` ADD COLUMN `brand` VARCHAR(100) DEFAULT NULL AFTER `category_id`");
+        }
+    }
+
     private void ensureOrdersColumns(Connection connection, Statement statement) throws SQLException {
         addColumnIfMissing(connection, statement, "orders", "original_amount", "ALTER TABLE `orders` ADD COLUMN `original_amount` DECIMAL(10,2) DEFAULT NULL AFTER `total_amount`");
         addColumnIfMissing(connection, statement, "orders", "discount_amount", "ALTER TABLE `orders` ADD COLUMN `discount_amount` DECIMAL(10,2) DEFAULT 0 AFTER `original_amount`");
@@ -97,6 +105,21 @@ public class CommerceFeatureTableInitializer {
                   `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                   KEY `idx_address_user_default` (`user_id`, `is_default`, `deleted`),
                   CONSTRAINT `fk_address_user` FOREIGN KEY (`user_id`) REFERENCES `user`(`id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """);
+    }
+
+    private void ensureSearchLogTable(Statement statement) throws SQLException {
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS `search_log` (
+                  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+                  `keyword` VARCHAR(100) NOT NULL,
+                  `search_count` INT DEFAULT 1,
+                  `last_search_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                  UNIQUE KEY `uk_search_keyword` (`keyword`),
+                  KEY `idx_search_count_time` (`search_count`, `last_search_time`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                 """);
     }
