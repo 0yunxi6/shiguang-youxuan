@@ -45,11 +45,16 @@
 - 优惠券模板、批量发券、新人礼包、积分兑换优惠券
 - 个人资料、密码修改、收货地址、消息中心、浏览历史、售后进度、发票抬头
 - 用户端 AI 客服：GLM-5.1 对话、本地兜底回复、订单/物流/优惠券/售后上下文查询、自助入口
+- AI 客服知识库：平台规则、售后政策、常见问题可维护，AI 回复优先检索知识库
+- 人工客服工单：用户端转人工、我的工单、后台接单/回复/解决/满意度
 - 后台客服工作台：会话列表、客户信息、最近订单、快捷处理入口
+- 运营增强中心：知识库、工单、活动统计、风控事件、媒体资源集中管理
 - 后台管理：仪表盘、商品、分类、订单、用户、评价、收藏、优惠券、售后
 - 后台批量上下架、订单批量发货/完成/取消、库存预警、CSV 导出
 - 登录失败限流、JWT 黑名单、接口限流、后台操作审计日志
-- 文件上传与静态资源访问
+- 风控检测：登录失败、异常登录、高频下单、限流拦截记录与后台处理
+- 文件上传与静态资源访问，对象存储抽象层预留 R2/OSS/COS/S3 配置
+- 活动数据统计：优惠券领取/使用、满减、限时活动转化分析
 
 ## 功能规划
 
@@ -247,6 +252,14 @@ docker compose down
 | `GLM_API_KEY` | GLM-5.1 AI 客服 Key，建议只放在本地 `.env` 或服务器环境变量 |
 | `GLM_API_ENDPOINT` | GLM OpenAI 兼容接口地址，默认 `https://api.z.ai/api/paas/v4/chat/completions` |
 | `GLM_MODEL` | AI 客服模型，默认 `glm-5.1` |
+| `STORAGE_PROVIDER` | 对象存储 provider，默认 `local` |
+| `STORAGE_LOCAL_DIR` | local provider 文件保存目录 |
+| `STORAGE_PUBLIC_BASE_URL` | 文件公开访问域名，空值时使用 `/api/uploads/**` |
+| `STORAGE_BUCKET` | 对象存储 bucket 名 |
+| `STORAGE_ENDPOINT` | R2/OSS/COS/S3 endpoint 预留配置 |
+| `STORAGE_ACCESS_KEY` | 对象存储 Access Key，禁止提交真实值 |
+| `STORAGE_SECRET_KEY` | 对象存储 Secret Key，禁止提交真实值 |
+| `STORAGE_REGION` | 对象存储区域 |
 | `BACKEND_PORT` | 后端映射端口 |
 | `FRONTEND_PORT` | 前端映射端口 |
 

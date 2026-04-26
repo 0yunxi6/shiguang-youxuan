@@ -83,6 +83,7 @@ const navItems = [
   { path: '/admin/coupons', label: '优惠券管理', icon: Tickets },
   { path: '/admin/after-sales', label: '售后管理', icon: Document },
   { path: '/admin/service', label: '客服工作台', icon: Service },
+  { path: '/admin/ops', label: '运营增强', icon: DataAnalysis },
   { path: '/admin/users', label: '用户管理', icon: User }
 ]
 const titleMap = {
@@ -95,6 +96,7 @@ const titleMap = {
   '/admin/coupons': '优惠券管理',
   '/admin/after-sales': '售后管理',
   '/admin/service': '客服工作台',
+  '/admin/ops': '运营增强',
   '/admin/users': '用户管理'
 }
 const activeMenu = computed(() => route.path)

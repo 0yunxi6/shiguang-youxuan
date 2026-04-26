@@ -3,6 +3,7 @@ package com.ecommerce.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.ecommerce.dto.AiChatRequest;
 import com.ecommerce.entity.AfterSale;
+import com.ecommerce.entity.AiKnowledgeBase;
 import com.ecommerce.entity.Order;
 import com.ecommerce.entity.OrderItem;
 import com.ecommerce.entity.Product;
@@ -71,6 +72,7 @@ public class AiCustomerService {
     private final UserCouponMapper userCouponMapper;
     private final AfterSaleMapper afterSaleMapper;
     private final ProductMapper productMapper;
+    private final AiKnowledgeBaseService aiKnowledgeBaseService;
 
     @Value("${ai.glm.api-key:}")
     private String apiKey;
@@ -92,17 +94,22 @@ public class AiCustomerService {
         }
 
         AiContext context = buildContext();
+        List<AiKnowledgeBase> matchedKnowledge = aiKnowledgeBaseService.searchForQuestion(message, 5);
         String deterministicReply = buildDeterministicReply(message, context);
         if (StringUtils.hasText(deterministicReply)) {
-            return Result.success(buildResponse(deterministicReply, false, "context-assistant", context));
+            return Result.success(buildResponse(deterministicReply, false, "context-assistant", context, matchedKnowledge));
+        }
+        String knowledgeReply = aiKnowledgeBaseService.directAnswerIfStrongMatch(message, matchedKnowledge);
+        if (StringUtils.hasText(knowledgeReply)) {
+            return Result.success(buildResponse(knowledgeReply, false, "knowledge-base", context, matchedKnowledge));
         }
 
         if (!StringUtils.hasText(apiKey)) {
-            return Result.success(buildResponse(fallbackReply(message, context), true, "local-fallback", context));
+            return Result.success(buildResponse(fallbackReply(message, context, matchedKnowledge), true, "local-fallback", context, matchedKnowledge));
         }
 
         try {
-            Map<String, Object> payload = buildPayload(request, message, context);
+            Map<String, Object> payload = buildPayload(request, message, context, matchedKnowledge);
             HttpRequest httpRequest = HttpRequest.newBuilder()
                     .uri(URI.create(endpoint))
                     .timeout(Duration.ofSeconds(30))
@@ -112,16 +119,16 @@ public class AiCustomerService {
                     .build();
             HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                return Result.success(buildResponse(fallbackReply(message, context), true, "local-fallback", context));
+                return Result.success(buildResponse(fallbackReply(message, context, matchedKnowledge), true, "local-fallback", context, matchedKnowledge));
             }
             JsonNode root = objectMapper.readTree(response.body());
             String reply = root.path("choices").path(0).path("message").path("content").asText();
             if (!StringUtils.hasText(reply)) {
-                reply = fallbackReply(message, context);
+                reply = fallbackReply(message, context, matchedKnowledge);
             }
-            return Result.success(buildResponse(reply.trim(), false, model, context));
+            return Result.success(buildResponse(reply.trim(), false, model, context, matchedKnowledge));
         } catch (Exception ignored) {
-            return Result.success(buildResponse(fallbackReply(message, context), true, "local-fallback", context));
+            return Result.success(buildResponse(fallbackReply(message, context, matchedKnowledge), true, "local-fallback", context, matchedKnowledge));
         }
     }
 
@@ -314,10 +321,14 @@ public class AiCustomerService {
         return "为你推荐这些拾光好物：" + products + "。你可以复制商品名到搜索框，或告诉我预算/品牌/用途，我再帮你缩小范围。";
     }
 
-    private Map<String, Object> buildPayload(AiChatRequest request, String message, AiContext context) {
+    private Map<String, Object> buildPayload(AiChatRequest request, String message, AiContext context, List<AiKnowledgeBase> matchedKnowledge) {
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", SYSTEM_PROMPT));
         messages.add(Map.of("role", "system", "content", "当前登录用户上下文：\n" + context.toPromptText()));
+        String knowledgePrompt = aiKnowledgeBaseService.buildPromptText(matchedKnowledge);
+        if (StringUtils.hasText(knowledgePrompt)) {
+            messages.add(Map.of("role", "system", "content", knowledgePrompt));
+        }
         if (request.getHistory() != null) {
             request.getHistory().stream()
                     .filter(item -> item != null && StringUtils.hasText(item.getContent()))
@@ -339,10 +350,19 @@ public class AiCustomerService {
         return payload;
     }
 
-    private String fallbackReply(String message, AiContext context) {
+    private String fallbackReply(String message, AiContext context, List<AiKnowledgeBase> matchedKnowledge) {
         String direct = buildDeterministicReply(message, context);
         if (StringUtils.hasText(direct)) {
             return direct;
+        }
+        String knowledgeReply = aiKnowledgeBaseService.directAnswerIfStrongMatch(message, matchedKnowledge);
+        if (StringUtils.hasText(knowledgeReply)) {
+            return knowledgeReply;
+        }
+        if (matchedKnowledge != null && !matchedKnowledge.isEmpty()) {
+            AiKnowledgeBase item = matchedKnowledge.get(0);
+            return "我在知识库里找到了相关规则「" + item.getTitle() + "」：\n" + item.getAnswer()
+                    + "\n如果仍未解决，可以点击右侧“人工协助”创建工单。";
         }
         return "我是拾光 AI 客服小光。你可以问我商品推荐、优惠券、下单支付、发票、物流和售后问题；如果涉及具体订单，请直接发送订单号，我会基于当前账号的订单数据帮你查看。";
     }
@@ -397,12 +417,22 @@ public class AiCustomerService {
         return false;
     }
 
-    private Map<String, Object> buildResponse(String reply, boolean fallback, String modelName, AiContext context) {
+    private Map<String, Object> buildResponse(String reply, boolean fallback, String modelName, AiContext context, List<AiKnowledgeBase> matchedKnowledge) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("reply", reply);
         data.put("fallback", fallback);
         data.put("model", modelName);
         data.put("context", context.toMap());
+        if (matchedKnowledge != null && !matchedKnowledge.isEmpty()) {
+            data.put("knowledge", matchedKnowledge.stream().map(item -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", item.getId());
+                row.put("category", item.getCategory());
+                row.put("title", item.getTitle());
+                row.put("keywords", item.getKeywords());
+                return row;
+            }).toList());
+        }
         return data;
     }
 

@@ -59,6 +59,17 @@ app:
   cors:
     allowed-origins: http://localhost:5173,http://localhost:3000
 
+# ???????????? local?????????? R2/OSS/COS/S3 ????
+storage:
+  provider: ${STORAGE_PROVIDER:local}
+  local-dir: ${STORAGE_LOCAL_DIR:uploads}
+  public-base-url: ${STORAGE_PUBLIC_BASE_URL:}
+  bucket: ${STORAGE_BUCKET:local}
+  endpoint: ${STORAGE_ENDPOINT:}
+  access-key: ${STORAGE_ACCESS_KEY:}
+  secret-key: ${STORAGE_SECRET_KEY:}
+  region: ${STORAGE_REGION:auto}
+
 # AI 客服配置：不要把真实 Key 写入仓库，运行时设置环境变量 GLM_API_KEY
 ai:
   glm:

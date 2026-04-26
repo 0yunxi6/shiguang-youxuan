@@ -31,3 +31,14 @@ server:
 
 file:
   upload-dir: ./uploads
+
+
+storage:
+  provider: ${STORAGE_PROVIDER:local}
+  local-dir: ${STORAGE_LOCAL_DIR:./uploads}
+  public-base-url: ${STORAGE_PUBLIC_BASE_URL:}
+  bucket: ${STORAGE_BUCKET:local}
+  endpoint: ${STORAGE_ENDPOINT:}
+  access-key: ${STORAGE_ACCESS_KEY:}
+  secret-key: ${STORAGE_SECRET_KEY:}
+  region: ${STORAGE_REGION:auto}

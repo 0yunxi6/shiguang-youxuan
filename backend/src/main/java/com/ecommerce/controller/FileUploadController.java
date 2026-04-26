@@ -1,23 +1,26 @@
 package com.ecommerce.controller;
 
+import com.ecommerce.entity.MediaAsset;
+import com.ecommerce.service.StorageService;
 import com.ecommerce.util.Result;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/upload")
+@RequiredArgsConstructor
 public class FileUploadController {
     private static final long MAX_IMAGE_SIZE = 10 * 1024 * 1024L;
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".jpg", ".jpeg", ".png", ".gif", ".webp");
@@ -25,11 +28,28 @@ public class FileUploadController {
             "image/jpeg", "image/png", "image/gif", "image/webp"
     );
 
-    @Value("${file.upload-dir:uploads}")
-    private String uploadDir;
+    private final StorageService storageService;
 
     @PostMapping("/image")
     public Result<?> uploadImage(@RequestParam("file") MultipartFile file) throws IOException {
+        return uploadImage(file, "image");
+    }
+
+    @PostMapping("/media")
+    public Result<?> uploadMedia(@RequestParam("file") MultipartFile file,
+                                 @RequestParam(defaultValue = "media") String bizType) throws IOException {
+        if (file.isEmpty()) {
+            return Result.error("请选择要上传的文件");
+        }
+        try {
+            MediaAsset asset = storageService.store(file, bizType);
+            return Result.success("上传成功", toMap(asset));
+        } catch (IllegalArgumentException ex) {
+            return Result.error(ex.getMessage());
+        }
+    }
+
+    private Result<?> uploadImage(MultipartFile file, String bizType) throws IOException {
         if (file.isEmpty()) {
             return Result.error("请选择要上传的文件");
         }
@@ -54,21 +74,12 @@ public class FileUploadController {
             return Result.error("图片内容校验失败，请上传真实图片文件");
         }
 
-        String filename = UUID.randomUUID().toString().replace("-", "") + extension;
-        Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
-        if (!Files.exists(uploadPath)) {
-            Files.createDirectories(uploadPath);
+        try {
+            MediaAsset asset = storageService.store(file, bizType);
+            return Result.success("上传成功", toMap(asset));
+        } catch (IllegalArgumentException ex) {
+            return Result.error(ex.getMessage());
         }
-
-        Path target = uploadPath.resolve(filename).normalize();
-        if (!target.startsWith(uploadPath)) {
-            return Result.error("文件路径不合法");
-        }
-        try (InputStream inputStream = file.getInputStream()) {
-            Files.copy(inputStream, target, StandardCopyOption.REPLACE_EXISTING);
-        }
-        String url = "/api/uploads/" + filename;
-        return Result.success("上传成功", url);
     }
 
     private boolean isAllowedImageHeader(MultipartFile file) throws IOException {
@@ -86,5 +97,19 @@ public class FileUploadController {
         boolean webp = length >= 12 && header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46
                 && header[8] == 0x57 && header[9] == 0x45 && header[10] == 0x42 && header[11] == 0x50;
         return jpeg || png || gif || webp;
+    }
+
+    private Map<String, Object> toMap(MediaAsset asset) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("id", asset.getId());
+        data.put("url", asset.getUrl());
+        data.put("provider", asset.getProvider());
+        data.put("bucket", asset.getBucket());
+        data.put("objectKey", asset.getObjectKey());
+        data.put("originalName", asset.getOriginalName());
+        data.put("contentType", asset.getContentType());
+        data.put("size", asset.getSize());
+        data.put("bizType", asset.getBizType());
+        return data;
     }
 }

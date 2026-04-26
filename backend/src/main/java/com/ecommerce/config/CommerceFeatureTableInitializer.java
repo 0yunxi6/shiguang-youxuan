@@ -240,6 +240,149 @@ public class CommerceFeatureTableInitializer {
                   CONSTRAINT `fk_invoice_user` FOREIGN KEY (`user_id`) REFERENCES `user`(`id`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                 """);
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS `ai_knowledge_base` (
+                  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+                  `category` VARCHAR(50) NOT NULL,
+                  `title` VARCHAR(120) NOT NULL,
+                  `question` VARCHAR(255) DEFAULT NULL,
+                  `answer` TEXT NOT NULL,
+                  `keywords` VARCHAR(255) DEFAULT NULL,
+                  `status` TINYINT DEFAULT 1,
+                  `sort_order` INT DEFAULT 100,
+                  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                  KEY `idx_kb_status_sort` (`status`, `sort_order`),
+                  KEY `idx_kb_category` (`category`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """);
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS `customer_ticket` (
+                  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+                  `user_id` BIGINT NOT NULL,
+                  `assignee_id` BIGINT DEFAULT NULL,
+                  `ticket_no` VARCHAR(40) NOT NULL,
+                  `source` VARCHAR(30) DEFAULT 'user',
+                  `type` VARCHAR(30) DEFAULT 'general',
+                  `title` VARCHAR(150) NOT NULL,
+                  `content` TEXT NOT NULL,
+                  `order_no` VARCHAR(50) DEFAULT NULL,
+                  `priority` TINYINT DEFAULT 1,
+                  `status` TINYINT DEFAULT 0,
+                  `resolution` TEXT,
+                  `satisfaction` TINYINT DEFAULT NULL,
+                  `satisfaction_remark` VARCHAR(500) DEFAULT NULL,
+                  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                  `closed_time` DATETIME DEFAULT NULL,
+                  UNIQUE KEY `uk_ticket_no` (`ticket_no`),
+                  KEY `idx_ticket_user_time` (`user_id`, `create_time`),
+                  KEY `idx_ticket_status_time` (`status`, `create_time`),
+                  KEY `idx_ticket_assignee` (`assignee_id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """);
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS `media_asset` (
+                  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+                  `user_id` BIGINT DEFAULT NULL,
+                  `provider` VARCHAR(30) NOT NULL DEFAULT 'local',
+                  `bucket` VARCHAR(120) DEFAULT NULL,
+                  `object_key` VARCHAR(500) NOT NULL,
+                  `url` VARCHAR(800) NOT NULL,
+                  `original_name` VARCHAR(255) DEFAULT NULL,
+                  `content_type` VARCHAR(100) DEFAULT NULL,
+                  `size` BIGINT DEFAULT 0,
+                  `biz_type` VARCHAR(50) DEFAULT 'media',
+                  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  KEY `idx_media_biz_time` (`biz_type`, `create_time`),
+                  KEY `idx_media_provider_time` (`provider`, `create_time`),
+                  KEY `idx_media_user_time` (`user_id`, `create_time`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """);
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS `campaign_event` (
+                  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+                  `user_id` BIGINT DEFAULT NULL,
+                  `campaign_id` BIGINT DEFAULT NULL,
+                  `campaign_type` VARCHAR(50) NOT NULL,
+                  `campaign_name` VARCHAR(120) DEFAULT NULL,
+                  `event_type` VARCHAR(30) NOT NULL,
+                  `related_id` BIGINT DEFAULT NULL,
+                  `amount` DECIMAL(10,2) DEFAULT 0,
+                  `metadata` VARCHAR(1000) DEFAULT NULL,
+                  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  KEY `idx_campaign_type_event_time` (`campaign_type`, `event_type`, `create_time`),
+                  KEY `idx_campaign_id_time` (`campaign_id`, `create_time`),
+                  KEY `idx_campaign_user_time` (`user_id`, `create_time`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """);
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS `risk_event` (
+                  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+                  `user_id` BIGINT DEFAULT NULL,
+                  `username` VARCHAR(80) DEFAULT NULL,
+                  `ip` VARCHAR(64) DEFAULT NULL,
+                  `event_type` VARCHAR(50) NOT NULL,
+                  `risk_level` VARCHAR(20) DEFAULT 'medium',
+                  `description` VARCHAR(500) DEFAULT NULL,
+                  `path` VARCHAR(255) DEFAULT NULL,
+                  `method` VARCHAR(20) DEFAULT NULL,
+                  `metadata` VARCHAR(1000) DEFAULT NULL,
+                  `status` TINYINT DEFAULT 0,
+                  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                  KEY `idx_risk_status_time` (`status`, `create_time`),
+                  KEY `idx_risk_type_level_time` (`event_type`, `risk_level`, `create_time`),
+                  KEY `idx_risk_user_time` (`user_id`, `create_time`),
+                  KEY `idx_risk_ip_time` (`ip`, `create_time`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """);
+        seedKnowledgeBase(statement);
+    }
+
+    private void seedKnowledgeBase(Statement statement) throws SQLException {
+        statement.execute("""
+                INSERT INTO `ai_knowledge_base` (`category`, `title`, `question`, `answer`, `keywords`, `status`, `sort_order`)
+                SELECT '售后政策', '售后退换政策', '如何申请退款退货换货？',
+                       '订单支付后如遇未发货、商品质量问题或规格不符，可在“我的订单”中申请退款、退货或换货。平台会根据订单状态和售后原因进行审核，审核结果可在个人中心的售后进度查看。',
+                       '售后,退款,退货,换货,维权,质量问题', 1, 10
+                WHERE NOT EXISTS (SELECT 1 FROM `ai_knowledge_base` WHERE `title` = '售后退换政策')
+                """);
+        statement.execute("""
+                INSERT INTO `ai_knowledge_base` (`category`, `title`, `question`, `answer`, `keywords`, `status`, `sort_order`)
+                SELECT '优惠券规则', '优惠券使用规则', '优惠券怎么使用？',
+                       '可用优惠券会在结算页自动匹配，满足门槛后可抵扣订单金额。每张券有有效期、使用门槛和状态限制；订单取消后，已使用的优惠券会自动恢复。',
+                       '优惠券,满减,领取,使用,抵扣,有效期', 1, 20
+                WHERE NOT EXISTS (SELECT 1 FROM `ai_knowledge_base` WHERE `title` = '优惠券使用规则')
+                """);
+        statement.execute("""
+                INSERT INTO `ai_knowledge_base` (`category`, `title`, `question`, `answer`, `keywords`, `status`, `sort_order`)
+                SELECT '物流说明', '配送与物流说明', '什么时候发货，怎么查物流？',
+                       '支付成功后平台会进入备货流程，后台发货后订单页会展示物流状态。当前演示环境使用模拟物流，真实快递公司轨迹可在后续接入物流 API 后展示。',
+                       '物流,发货,配送,运单,快递,到货', 1, 30
+                WHERE NOT EXISTS (SELECT 1 FROM `ai_knowledge_base` WHERE `title` = '配送与物流说明')
+                """);
+        statement.execute("""
+                INSERT INTO `ai_knowledge_base` (`category`, `title`, `question`, `answer`, `keywords`, `status`, `sort_order`)
+                SELECT '发票规则', '发票信息维护', '发票抬头在哪里维护？',
+                       '用户可在个人中心维护发票抬头和税号，结算时选择对应发票信息后会写入订单。如订单已提交后需要修改发票信息，建议创建人工客服工单处理。',
+                       '发票,抬头,税号,开票,企业', 1, 40
+                WHERE NOT EXISTS (SELECT 1 FROM `ai_knowledge_base` WHERE `title` = '发票信息维护')
+                """);
+        statement.execute("""
+                INSERT INTO `ai_knowledge_base` (`category`, `title`, `question`, `answer`, `keywords`, `status`, `sort_order`)
+                SELECT '账号安全', '账号安全与登录提醒', '如何保护账号安全？',
+                       '建议定期修改密码，开启两步验证，并关注登录提醒消息。如果发现异常登录或不是本人操作，请及时修改密码并联系人工客服。',
+                       '账号安全,密码,两步验证,登录提醒,异常登录', 1, 50
+                WHERE NOT EXISTS (SELECT 1 FROM `ai_knowledge_base` WHERE `title` = '账号安全与登录提醒')
+                """);
+        statement.execute("""
+                INSERT INTO `ai_knowledge_base` (`category`, `title`, `question`, `answer`, `keywords`, `status`, `sort_order`)
+                SELECT '会员积分', '会员积分规则', '积分怎么获得和使用？',
+                       '确认收货后会根据订单实付金额增加积分，积分可在个人中心兑换优惠券。会员等级会随累计积分提升，后续可扩展更多会员权益。',
+                       '会员,积分,等级,兑换,权益', 1, 60
+                WHERE NOT EXISTS (SELECT 1 FROM `ai_knowledge_base` WHERE `title` = '会员积分规则')
+                """);
     }
 
     private void addColumnIfMissing(Connection connection, Statement statement, String tableName, String columnName, String alterSql) throws SQLException {

@@ -38,6 +38,7 @@ public class AuthService {
     private final CouponService couponService;
     private final MessageService messageService;
     private final TokenBlacklistService tokenBlacklistService;
+    private final RiskEventService riskEventService;
     private final Map<String, LoginFailure> loginFailures = new ConcurrentHashMap<>();
 
     public Result<?> login(LoginRequest request, HttpServletRequest servletRequest) {
@@ -50,7 +51,7 @@ public class AuthService {
             );
             loginFailures.remove(loginKey);
         } catch (AuthenticationException e) {
-            recordLoginFailure(loginKey);
+            recordLoginFailure(loginKey, username, servletRequest);
             throw e;
         }
         User user = userMapper.findByUsername(username);
@@ -65,6 +66,14 @@ public class AuthService {
         data.put("token", token);
         if (user != null) {
             String ip = resolveIp(servletRequest);
+            String oldIp = user.getLastLoginIp();
+            if (oldIp != null && !oldIp.isBlank() && !oldIp.equals(ip)) {
+                riskEventService.record(user.getId(), user.getUsername(), ip, "abnormal_login", "low",
+                        "账号从新 IP 登录，上一登录 IP：" + oldIp,
+                        servletRequest == null ? null : servletRequest.getRequestURI(),
+                        servletRequest == null ? null : servletRequest.getMethod(),
+                        "{\"oldIp\":\"" + oldIp + "\"}");
+            }
             user.setLastLoginTime(LocalDateTime.now());
             user.setLastLoginIp(ip);
             if (user.getPoints() == null) {
@@ -105,8 +114,8 @@ public class AuthService {
         }
     }
 
-    private void recordLoginFailure(String loginKey) {
-        loginFailures.compute(loginKey, (key, old) -> {
+    private void recordLoginFailure(String loginKey, String username, HttpServletRequest request) {
+        LoginFailure updated = loginFailures.compute(loginKey, (key, old) -> {
             long now = System.currentTimeMillis();
             LoginFailure failure = old == null || old.lockUntil <= now ? new LoginFailure() : old;
             failure.count++;
@@ -115,6 +124,13 @@ public class AuthService {
             }
             return failure;
         });
+        String ip = resolveIp(request);
+        boolean locked = updated != null && updated.count >= MAX_LOGIN_FAILURES;
+        riskEventService.record(null, username, ip, "login_failed", locked ? "high" : "medium",
+                locked ? "登录失败次数过多，账号已临时锁定" : "账号登录失败",
+                request == null ? null : request.getRequestURI(),
+                request == null ? null : request.getMethod(),
+                "{\"count\":" + (updated == null ? 1 : updated.count) + "}");
     }
 
     private static class LoginFailure {

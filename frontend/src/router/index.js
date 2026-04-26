@@ -23,6 +23,7 @@ const FavoriteManage = () => import('../views/admin/FavoriteManage.vue')
 const CouponManage = () => import('../views/admin/CouponManage.vue')
 const AfterSaleManage = () => import('../views/admin/AfterSaleManage.vue')
 const CustomerServiceWorkbench = () => import('../views/admin/CustomerServiceWorkbench.vue')
+const AdminOpsCenter = () => import('../views/admin/AdminOpsCenter.vue')
 
 const routes = [
   {
@@ -100,6 +101,7 @@ const routes = [
       { path: 'coupons', name: 'AdminCoupons', component: CouponManage, meta: { title: '优惠券管理 - 拾光' } },
       { path: 'after-sales', name: 'AdminAfterSales', component: AfterSaleManage, meta: { title: '售后管理 - 拾光' } },
       { path: 'service', name: 'AdminServiceWorkbench', component: CustomerServiceWorkbench, meta: { title: '客服工作台 - 拾光' } },
+      { path: 'ops', name: 'AdminOpsCenter', component: AdminOpsCenter, meta: { title: '运营增强 - 拾光' } },
       { path: 'users', name: 'AdminUsers', component: UserManage, meta: { title: '用户管理 - 拾光' } }
     ]
   },

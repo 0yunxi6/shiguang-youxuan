@@ -42,6 +42,8 @@ public class OrderService {
     private final ProductMapper productMapper;
     private final CouponService couponService;
     private final MessageService messageService;
+    private final CampaignEventService campaignEventService;
+    private final RiskEventService riskEventService;
 
     @Transactional
     public Result<?> createOrder(String receiverName, String receiverPhone, String receiverAddress) {
@@ -66,6 +68,14 @@ public class OrderService {
         }
 
         User user = getCurrentUser();
+        long recentOrderCount = orderMapper.selectCount(new QueryWrapper<Order>()
+                .eq("user_id", user.getId())
+                .ge("create_time", LocalDateTime.now().minusMinutes(10)));
+        if (recentOrderCount >= 5) {
+            riskEventService.record(user.getId(), user.getUsername(), null, "order_frequency", "high",
+                    "10 分钟内创建订单次数异常，疑似刷单",
+                    "/orders", "POST", "{\"recentOrderCount\":" + recentOrderCount + "}");
+        }
         QueryWrapper<Cart> wrapper = new QueryWrapper<>();
         wrapper.eq("user_id", user.getId());
         Set<Long> selectedIds = normalizeCartItemIds(cartItemIds);
@@ -121,6 +131,16 @@ public class OrderService {
         order.setCreateTime(LocalDateTime.now());
         orderMapper.insert(order);
         couponService.markCouponUsed(coupon);
+        if (coupon != null) {
+            campaignEventService.record(user.getId(), coupon.getId(), CampaignEventService.TYPE_COUPON, coupon.getName(),
+                    CampaignEventService.EVENT_ORDER, order.getId(), discountAmount,
+                    "{\"orderNo\":\"" + order.getOrderNo() + "\"}");
+        }
+        if (discountAmount.compareTo(BigDecimal.ZERO) > 0) {
+            campaignEventService.record(user.getId(), coupon == null ? null : coupon.getId(), CampaignEventService.TYPE_FULL_REDUCTION,
+                    coupon == null ? "订单满减" : coupon.getName(), CampaignEventService.EVENT_ORDER, order.getId(), discountAmount,
+                    "{\"orderNo\":\"" + order.getOrderNo() + "\"}");
+        }
 
         for (Cart cart : carts) {
             Product product = productMap.get(cart.getProductId());
@@ -142,6 +162,12 @@ public class OrderService {
             orderItem.setTotalAmount(itemTotal);
             orderItem.setCreateTime(LocalDateTime.now());
             orderItemMapper.insert(orderItem);
+            if (isPromotionActive(product)) {
+                String campaignName = StringUtils.hasText(product.getPromotionTag()) ? product.getPromotionTag() : product.getName();
+                campaignEventService.record(user.getId(), product.getId(), CampaignEventService.TYPE_LIMITED_PROMOTION, campaignName,
+                        CampaignEventService.EVENT_ORDER, order.getId(), itemTotal,
+                        "{\"productName\":\"" + product.getName() + "\",\"quantity\":" + cart.getQuantity() + "}");
+            }
         }
 
         cartMapper.delete(wrapper);

@@ -30,6 +30,7 @@ public class CouponService {
     private final UserCouponMapper userCouponMapper;
     private final UserMapper userMapper;
     private final MessageService messageService;
+    private final CampaignEventService campaignEventService;
 
     public Result<?> getMyCoupons(BigDecimal orderAmount, boolean availableOnly) {
         User user = getCurrentUser();
@@ -73,6 +74,8 @@ public class CouponService {
         coupon.setUseTime(LocalDateTime.now());
         coupon.setUpdateTime(LocalDateTime.now());
         userCouponMapper.updateById(coupon);
+        campaignEventService.record(coupon.getUserId(), coupon.getId(), CampaignEventService.TYPE_COUPON, coupon.getName(),
+                CampaignEventService.EVENT_USE, coupon.getId(), coupon.getDiscountAmount(), "{\"couponCode\":\"" + coupon.getCouponCode() + "\"}");
     }
 
     public void restoreCoupon(Long couponId, Long userId) {
@@ -88,6 +91,8 @@ public class CouponService {
             coupon.setUseTime(null);
             coupon.setUpdateTime(LocalDateTime.now());
             userCouponMapper.updateById(coupon);
+            campaignEventService.record(userId, coupon.getId(), CampaignEventService.TYPE_COUPON, coupon.getName(),
+                    CampaignEventService.EVENT_CANCEL, coupon.getId(), coupon.getDiscountAmount(), "{\"couponCode\":\"" + coupon.getCouponCode() + "\"}");
         }
     }
 
@@ -170,6 +175,8 @@ public class CouponService {
         coupon.setCreateTime(LocalDateTime.now());
         coupon.setUpdateTime(LocalDateTime.now());
         userCouponMapper.insert(coupon);
+        campaignEventService.record(userId, coupon.getId(), CampaignEventService.TYPE_COUPON, name,
+                CampaignEventService.EVENT_ISSUE, coupon.getId(), discountAmount, "{\"couponCode\":\"" + coupon.getCouponCode() + "\"}");
     }
 
     private int normalizeExchangePoints(int points) {

@@ -474,7 +474,8 @@ const handleAvatarChange = async (e) => {
   fd.append('file', file)
   try {
     const res = await uploadFile(fd)
-    const avatarUrl = res.data
+    const avatarUrl = typeof res.data === 'string' ? res.data : res.data?.url
+    if (!avatarUrl) throw new Error('empty upload url')
     await updateProfile({ avatar: avatarUrl })
     userInfo.value.avatar = avatarUrl
     userStore.setUserInfo({ ...userStore.userInfo, avatar: avatarUrl })

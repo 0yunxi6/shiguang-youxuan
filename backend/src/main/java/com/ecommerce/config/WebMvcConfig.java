@@ -18,7 +18,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
         this.adminAuditInterceptor = adminAuditInterceptor;
     }
 
-    @Value("${file.upload-dir:uploads}")
+    @Value("${storage.local-dir:${file.upload-dir:uploads}}")
     private String uploadDir;
 
     @Override

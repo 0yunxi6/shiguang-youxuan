@@ -170,6 +170,23 @@
 
       <section class="info-card">
         <div class="card-heading">
+          <h3>人工工单</h3>
+          <button :disabled="ticketSubmitting" @click="createHumanTicket()">
+            {{ ticketSubmitting ? '提交中' : '转人工' }}
+          </button>
+        </div>
+        <div v-if="tickets.length" class="ticket-list">
+          <div v-for="ticket in tickets.slice(0, 3)" :key="ticket.id" class="ticket-item">
+            <strong>{{ ticket.ticketNo }}</strong>
+            <span>{{ ticket.title }}</span>
+            <em>{{ ticketStatusText(ticket.status) }}</em>
+          </div>
+        </div>
+        <div v-else class="empty-mini">AI 无法解决时，可一键创建人工客服工单。</div>
+      </section>
+
+      <section class="info-card">
+        <div class="card-heading">
           <h3>当前概览</h3>
           <span>实时读取</span>
         </div>
@@ -187,7 +204,7 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { chatWithAi, getAfterSales, getCoupons, getOrderList, getUserProfile } from '../api'
+import { chatWithAi, createTicket, getAfterSales, getCoupons, getMyTickets, getOrderList, getUserProfile } from '../api'
 import UserAvatar from '../components/UserAvatar.vue'
 
 const router = useRouter()
@@ -197,6 +214,8 @@ const userProfile = ref(null)
 const recentOrders = ref([])
 const coupons = ref([])
 const afterSales = ref([])
+const tickets = ref([])
+const ticketSubmitting = ref(false)
 const messagesEndRef = ref(null)
 const messageListRef = ref(null)
 
@@ -223,7 +242,7 @@ const selfActions = [
   { text: '售后进度', icon: '🔁', route: '/profile?tab=afterSales' },
   { text: '发票信息', icon: '🧾', route: '/profile?tab=invoices' },
   { text: '消息中心', icon: '🔔', route: '/profile?tab=messages' },
-  { text: '人工协助', icon: '👩‍💼', prompt: '我需要人工客服协助处理问题' }
+  { text: '人工协助', icon: '👩‍💼', ticket: true, prompt: '我需要人工客服协助处理问题' }
 ]
 
 const messages = ref([
@@ -268,6 +287,13 @@ async function loadContext() {
   try {
     const afterSaleRes = await getAfterSales()
     afterSales.value = Array.isArray(afterSaleRes.data) ? afterSaleRes.data : []
+  } catch (error) {
+    console.error(error)
+  }
+
+  try {
+    const ticketRes = await getMyTickets()
+    tickets.value = Array.isArray(ticketRes.data) ? ticketRes.data : []
   } catch (error) {
     console.error(error)
   }
@@ -319,7 +345,37 @@ function handleSelfAction(action) {
     router.push(action.route)
     return
   }
+  if (action.ticket) {
+    createHumanTicket(action.prompt)
+    return
+  }
   sendQuick(action.prompt)
+}
+
+async function createHumanTicket(prompt) {
+  if (ticketSubmitting.value) return
+  const lastQuestion = [...messages.value].reverse().find(item => item.role === 'user')?.content
+  const content = resolvePrompt(prompt) || lastQuestion || '我需要人工客服协助处理问题'
+  ticketSubmitting.value = true
+  try {
+    const res = await createTicket({
+      source: 'ai',
+      type: 'consult',
+      title: content.length > 28 ? `${content.slice(0, 28)}...` : content,
+      content,
+      orderNo: recentOrder.value?.orderNo || ''
+    })
+    const ticket = res.data || {}
+    appendMessage('assistant', `已为你创建人工客服工单 ${ticket.ticketNo || ''}。客服会在后台工作台处理，你也可以在右侧查看工单进度。`)
+    ElMessage.success('人工客服工单已创建')
+    const ticketRes = await getMyTickets()
+    tickets.value = Array.isArray(ticketRes.data) ? ticketRes.data : []
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('工单创建失败，请稍后再试')
+  } finally {
+    ticketSubmitting.value = false
+  }
 }
 
 function resetConversation() {
@@ -380,6 +436,15 @@ function orderStatusText(status) {
     3: '已完成',
     4: '已取消'
   }[status] || '未知'
+}
+
+function ticketStatusText(status) {
+  return {
+    0: '待处理',
+    1: '处理中',
+    2: '已解决',
+    3: '已关闭'
+  }[Number(status)] || '待处理'
 }
 
 onMounted(() => {
@@ -944,6 +1009,47 @@ onMounted(() => {
   color: #8a97ad;
   background: #f8fafd;
   border-radius: 10px;
+}
+
+.ticket-list {
+  display: grid;
+  gap: 9px;
+}
+
+.ticket-item {
+  padding: 10px;
+  border: 1px solid #edf1f6;
+  border-radius: 10px;
+  background: #fbfdff;
+}
+
+.ticket-item strong,
+.ticket-item span {
+  display: block;
+}
+
+.ticket-item strong {
+  color: #1664ff;
+  font-size: 12px;
+}
+
+.ticket-item span {
+  margin: 4px 0;
+  color: #53627a;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ticket-item em {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #edf5ff;
+  color: #1664ff;
+  font-style: normal;
+  font-size: 12px;
 }
 
 @media (max-width: 1180px) {

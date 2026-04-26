@@ -12,6 +12,10 @@ export const forgotPasswordReset = (data) => postJson('/auth/forgot-password/res
 // ========== AI Customer Service ==========
 export const chatWithAi = (data) => postJson('/ai/chat', data)
 export const getAiContext = () => request.get('/ai/context')
+export const getKnowledgeFaq = (params) => request.get('/knowledge/faq', { params })
+export const createTicket = (data) => request.post('/tickets', data)
+export const getMyTickets = () => request.get('/tickets/my')
+export const rateTicket = (id, data) => request.put(`/tickets/${id}/satisfaction`, data)
 
 // ========== Products ==========
 export const getProductList = (params) => request.get('/products', { params })
@@ -76,6 +80,7 @@ export const setDefaultInvoice = (id) => request.put(`/invoices/${id}/default`)
 
 // ========== File Upload ==========
 export const uploadFile = (formData) => request.post('/upload/image', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+export const uploadMedia = (formData, params) => request.post('/upload/media', formData, { params, headers: { 'Content-Type': 'multipart/form-data' } })
 
 // ========== Admin APIs ==========
 export const adminGetStats = () => request.get('/admin/dashboard/stats')
@@ -102,3 +107,16 @@ export const adminUpdateAfterSaleStatus = (id, status, remark) => request.put(`/
 export const adminGetCouponTemplates = () => request.get('/admin/coupons/templates')
 export const adminCreateCouponTemplate = (data) => request.post('/admin/coupons/templates', data)
 export const adminIssueCouponTemplate = (id, params) => request.post(`/admin/coupons/templates/${id}/issue`, null, { params })
+export const adminGetKnowledge = (params) => request.get('/admin/knowledge', { params })
+export const adminCreateKnowledge = (data) => request.post('/admin/knowledge', data)
+export const adminUpdateKnowledge = (id, data) => request.put(`/admin/knowledge/${id}`, data)
+export const adminDeleteKnowledge = (id) => request.delete(`/admin/knowledge/${id}`)
+export const adminGetTickets = (params) => request.get('/admin/tickets', { params })
+export const adminAssignTicket = (id, params = {}) => request.put(`/admin/tickets/${id}/assign`, null, { params })
+export const adminUpdateTicketStatus = (id, params) => request.put(`/admin/tickets/${id}/status`, null, { params })
+export const adminReplyTicket = (id, data) => request.put(`/admin/tickets/${id}/reply`, data)
+export const adminGetCampaignStats = (params) => request.get('/admin/campaigns/stats', { params })
+export const adminGetCampaignEvents = (params) => request.get('/admin/campaigns/events', { params })
+export const adminGetRiskEvents = (params) => request.get('/admin/risk/events', { params })
+export const adminUpdateRiskStatus = (id, status) => request.put(`/admin/risk/events/${id}/status`, null, { params: { status } })
+export const adminGetMediaAssets = (params) => request.get('/admin/media', { params })

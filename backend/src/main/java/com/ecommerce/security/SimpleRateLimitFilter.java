@@ -1,10 +1,12 @@
 package com.ecommerce.security;
 
+import com.ecommerce.service.RiskEventService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -15,16 +17,21 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
+@RequiredArgsConstructor
 public class SimpleRateLimitFilter extends OncePerRequestFilter {
     private static final long WINDOW_MILLIS = 60_000L;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private final RiskEventService riskEventService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         int limit = resolveLimit(request);
         if (limit > 0 && !allow(request, limit)) {
+            riskEventService.recordRequest(request, "rate_limit_block", "high",
+                    "接口访问频率过高，疑似刷单/恶意注册/高频爬虫",
+                    "{\"limit\":" + limit + ",\"windowMillis\":" + WINDOW_MILLIS + "}");
             response.setStatus(429);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             OBJECT_MAPPER.writeValue(response.getWriter(), Map.of(
