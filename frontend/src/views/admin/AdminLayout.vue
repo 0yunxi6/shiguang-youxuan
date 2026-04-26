@@ -64,7 +64,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../../store/user'
 import { logoutApi } from '../../api'
-import { DataAnalysis, Goods, List, Document, User, HomeFilled, Expand, Fold, Right, ArrowUp, ArrowDown, SwitchButton, Star, Tickets } from '@element-plus/icons-vue'
+import { DataAnalysis, Goods, List, Document, User, HomeFilled, Expand, Fold, Right, ArrowUp, ArrowDown, SwitchButton, Star, Tickets, Service } from '@element-plus/icons-vue'
 import UserAvatar from '../../components/UserAvatar.vue'
 
 const route = useRoute()
@@ -82,6 +82,7 @@ const navItems = [
   { path: '/admin/favorites', label: '收藏管理', icon: Star },
   { path: '/admin/coupons', label: '优惠券管理', icon: Tickets },
   { path: '/admin/after-sales', label: '售后管理', icon: Document },
+  { path: '/admin/service', label: '客服工作台', icon: Service },
   { path: '/admin/users', label: '用户管理', icon: User }
 ]
 const titleMap = {
@@ -93,6 +94,7 @@ const titleMap = {
   '/admin/favorites': '收藏管理',
   '/admin/coupons': '优惠券管理',
   '/admin/after-sales': '售后管理',
+  '/admin/service': '客服工作台',
   '/admin/users': '用户管理'
 }
 const activeMenu = computed(() => route.path)
