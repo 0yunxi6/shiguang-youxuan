@@ -132,7 +132,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getProductList } from '../api'
 import { useAddToCart } from '../composables/useAddToCart'
@@ -167,6 +167,58 @@ const sortTabs = computed(() => [
 
 const { totalPages, visiblePages } = useVisiblePages(page, total, pageSize)
 
+const firstQueryValue = (value) => Array.isArray(value) ? value[0] : value
+const parseQueryNumber = (value) => {
+  const raw = firstQueryValue(value)
+  if (raw === undefined || raw === null || raw === '') return null
+  const number = Number(raw)
+  return Number.isFinite(number) ? number : null
+}
+const hasPriceValue = (value) => value !== null && value !== undefined && value !== ''
+
+const hydrateFromQuery = () => {
+  keyword.value = firstQueryValue(route.query.keyword) || ''
+  page.value = Math.max(Number(firstQueryValue(route.query.page) || 1), 1)
+  const sort = firstQueryValue(route.query.sort) || 'default'
+  if (sort === 'price_asc' || sort === 'price_desc') {
+    currentSort.value = 'price'
+    sortAsc.value = sort === 'price_asc'
+  } else if (['sales', 'newest'].includes(sort)) {
+    currentSort.value = sort
+    sortAsc.value = false
+  } else {
+    currentSort.value = 'default'
+    sortAsc.value = false
+  }
+  minPrice.value = parseQueryNumber(route.query.minPrice)
+  maxPrice.value = parseQueryNumber(route.query.maxPrice)
+  inStockOnly.value = firstQueryValue(route.query.inStockOnly) === 'true'
+}
+
+const buildRouteQuery = () => {
+  const query = {}
+  if (keyword.value) query.keyword = keyword.value
+  if (page.value > 1) query.page = String(page.value)
+  if (currentSort.value === 'sales') query.sort = 'sales'
+  if (currentSort.value === 'newest') query.sort = 'newest'
+  if (currentSort.value === 'price') query.sort = sortAsc.value ? 'price_asc' : 'price_desc'
+  if (hasPriceValue(minPrice.value)) query.minPrice = String(minPrice.value)
+  if (hasPriceValue(maxPrice.value)) query.maxPrice = String(maxPrice.value)
+  if (inStockOnly.value) query.inStockOnly = 'true'
+  return query
+}
+
+const isSameQuery = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+
+const syncQueryAndLoad = () => {
+  const nextQuery = buildRouteQuery()
+  if (isSameQuery(route.query, nextQuery)) {
+    loadProducts()
+    return
+  }
+  router.replace({ path: '/search', query: nextQuery })
+}
+
 const loadProducts = async () => {
   loading.value = true
   try {
@@ -187,8 +239,8 @@ const loadProducts = async () => {
       params.sort = 'newest'
     }
 
-    if (minPrice.value) params.minPrice = minPrice.value
-    if (maxPrice.value) params.maxPrice = maxPrice.value
+    if (hasPriceValue(minPrice.value)) params.minPrice = minPrice.value
+    if (hasPriceValue(maxPrice.value)) params.maxPrice = maxPrice.value
     if (inStockOnly.value) params.inStockOnly = true
 
     const res = await getProductList(params)
@@ -207,23 +259,23 @@ const changeSort = (sort) => {
   }
   currentSort.value = sort
   page.value = 1
-  loadProducts()
+  syncQueryAndLoad()
 }
 
 const applyPriceFilter = () => {
   page.value = 1
-  loadProducts()
+  syncQueryAndLoad()
 }
 
 const applyStockFilter = () => {
   page.value = 1
-  loadProducts()
+  syncQueryAndLoad()
 }
 
 const changePage = (p) => {
   page.value = p
   window.scrollTo({ top: 0, behavior: 'smooth' })
-  loadProducts()
+  syncQueryAndLoad()
 }
 
 const goToDetail = (id) => router.push(`/product/${id}`)
@@ -233,20 +285,10 @@ const searchByTag = (tag) => {
 }
 
 
-watch(() => route.query.keyword, (val) => {
-  keyword.value = val || ''
-  page.value = 1
-  currentSort.value = 'default'
-  minPrice.value = null
-  maxPrice.value = null
-  inStockOnly.value = false
+watch(() => route.query, () => {
+  hydrateFromQuery()
   loadProducts()
-}, { immediate: false })
-
-onMounted(() => {
-  keyword.value = route.query.keyword || ''
-  loadProducts()
-})
+}, { immediate: true, deep: true })
 </script>
 
 <style scoped>

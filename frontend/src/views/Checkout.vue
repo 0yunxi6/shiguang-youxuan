@@ -226,7 +226,7 @@
           <el-icon><CircleCheckFilled /></el-icon>
         </div>
         <h2>订单提交成功</h2>
-        <p>您的订单已提交，请等待发货</p>
+        <p>您的订单已提交，可前往订单页完成模拟支付</p>
         <div class="order-number">
           订单号：<span>{{ orderNo }}</span>
         </div>
@@ -277,7 +277,15 @@
 <script setup>
 import { ref, computed, onMounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getCartList, createOrder, getCoupons } from '../api'
+import {
+  getCartList,
+  createOrder,
+  getCoupons,
+  getAddresses,
+  createAddress as createAddressApi,
+  updateAddress as updateAddressApi,
+  deleteAddress as deleteAddressApi
+} from '../api'
 import { useCartStore } from '../store/cart'
 import { storage } from '../utils/storage'
 import { ElMessage } from 'element-plus'
@@ -363,8 +371,47 @@ const selectedCartItemIds = computed(() => {
     .filter(id => Number.isInteger(id) && id > 0)
 })
 
+const toViewAddress = (address) => ({
+  id: address.id,
+  name: address.receiverName || address.name || '',
+  phone: address.receiverPhone || address.phone || '',
+  province: address.province || '',
+  city: address.city || '',
+  district: address.district || '',
+  detail: address.detail || '',
+  isDefault: address.isDefault === true || address.isDefault === 1
+})
+
+const toApiAddress = () => ({
+  receiverName: addressForm.name,
+  receiverPhone: addressForm.phone,
+  province: addressForm.province,
+  city: addressForm.city,
+  district: addressForm.district,
+  detail: addressForm.detail,
+  isDefault: editingAddress.value?.isDefault || addresses.value.length === 0
+})
+
+const resetAddressForm = () => {
+  Object.assign(addressForm, { id: null, name: '', phone: '', province: '', city: '', district: '', detail: '' })
+}
+
+const loadAddresses = async () => {
+  try {
+    const res = await getAddresses()
+    const list = (res.data || []).map(toViewAddress)
+    if (list.length) {
+      addresses.value = list
+      storage.setJSON('checkoutAddresses', list)
+    }
+  } catch (error) {
+    addresses.value = storage.getJSON('checkoutAddresses', defaultAddresses)
+  }
+}
+
 const loadCart = async () => {
   try {
+    await loadAddresses()
     const res = await getCartList()
     const allItems = res.data || []
     cartItems.value = selectedCartItemIds.value.length
@@ -374,7 +421,6 @@ const loadCart = async () => {
       ElMessage.warning('购物车为空')
       router.push('/cart')
     }
-    // Select default address
     selectedAddress.value = addresses.value.find(a => a.isDefault) || addresses.value[0]
     await loadCoupons()
   } catch (error) {
@@ -401,25 +447,35 @@ const loadCoupons = async () => {
   }
 }
 
-const saveAddress = () => {
-  if (editingAddress.value) {
-    // Update existing
-    const idx = addresses.value.findIndex(a => a.id === editingAddress.value.id)
-    if (idx !== -1) {
-      addresses.value[idx] = { ...addressForm, id: editingAddress.value.id, isDefault: editingAddress.value.isDefault }
+const saveAddress = async () => {
+  try {
+    if (editingAddress.value) {
+      await updateAddressApi(editingAddress.value.id, toApiAddress())
+      ElMessage.success('地址已更新')
+    } else {
+      await createAddressApi(toApiAddress())
+      ElMessage.success('地址已保存')
+    }
+    await loadAddresses()
+    selectedAddress.value = addresses.value.find(a => a.isDefault) || addresses.value[0]
+  } catch (error) {
+    if (editingAddress.value) {
+      const idx = addresses.value.findIndex(a => a.id === editingAddress.value.id)
+      if (idx !== -1) {
+        addresses.value[idx] = { ...addressForm, id: editingAddress.value.id, isDefault: editingAddress.value.isDefault }
+      }
+      ElMessage.success('地址已更新到本地')
+    } else {
+      const newId = Date.now()
+      addresses.value.push({ ...addressForm, id: newId, isDefault: addresses.value.length === 0 })
+      ElMessage.success('地址已保存到本地')
     }
     storage.setJSON('checkoutAddresses', addresses.value)
-    ElMessage.success('地址已更新')
-  } else {
-    // Add new
-    const newId = addresses.value.length + 1
-    addresses.value.push({ ...addressForm, id: newId, isDefault: false })
-    storage.setJSON('checkoutAddresses', addresses.value)
-    ElMessage.success('地址已保存')
+  } finally {
+    showAddressForm.value = false
+    editingAddress.value = null
+    resetAddressForm()
   }
-  showAddressForm.value = false
-  editingAddress.value = null
-  Object.assign(addressForm, { id: null, name: '', phone: '', province: '', city: '', district: '', detail: '' })
 }
 
 const editAddress = (addr) => {
@@ -428,16 +484,22 @@ const editAddress = (addr) => {
   showAddressForm.value = true
 }
 
-const deleteAddress = (id) => {
-  addresses.value = addresses.value.filter(a => a.id !== id)
-  storage.setJSON('checkoutAddresses', addresses.value)
+const deleteAddress = async (id) => {
+  try {
+    await deleteAddressApi(id)
+    await loadAddresses()
+  } catch (error) {
+    addresses.value = addresses.value.filter(a => a.id !== id)
+    storage.setJSON('checkoutAddresses', addresses.value)
+  }
+  selectedAddress.value = addresses.value.find(a => a.isDefault) || addresses.value[0] || null
   ElMessage.success('地址已删除')
 }
 
 const cancelAddress = () => {
   showAddressForm.value = false
   editingAddress.value = null
-  Object.assign(addressForm, { id: null, name: '', phone: '', province: '', city: '', district: '', detail: '' })
+  resetAddressForm()
 }
 
 const selectCoupon = (coupon) => {

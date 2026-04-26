@@ -144,10 +144,14 @@ public class OrderService {
         return Result.success("订单创建成功", Map.of("orderId", order.getId(), "orderNo", order.getOrderNo()));
     }
 
-    public Result<?> getOrderList() {
+    public Result<?> getOrderList(Integer status) {
         User user = getCurrentUser();
         QueryWrapper<Order> wrapper = new QueryWrapper<>();
-        wrapper.eq("user_id", user.getId()).orderByDesc("create_time");
+        wrapper.eq("user_id", user.getId());
+        if (status != null && status >= 0 && status <= 4) {
+            wrapper.eq("status", status);
+        }
+        wrapper.orderByDesc("create_time");
         List<Order> orders = orderMapper.selectList(wrapper);
         if (orders.isEmpty()) {
             return Result.success(List.of());
@@ -172,6 +176,22 @@ public class OrderService {
             return Result.error("订单不存在");
         }
         return Result.success(buildOrderResponse(order, getOrderItems(id)));
+    }
+
+    @Transactional
+    public Result<?> payOrder(Long id) {
+        User user = getCurrentUser();
+        Order order = orderMapper.selectById(id);
+        if (order == null || !order.getUserId().equals(user.getId())) {
+            return Result.error("订单不存在");
+        }
+        if (order.getStatus() == null || order.getStatus() != 0) {
+            return Result.error("当前订单状态不支持支付");
+        }
+        order.setStatus(1);
+        order.setUpdateTime(LocalDateTime.now());
+        orderMapper.updateById(order);
+        return Result.success("支付成功");
     }
 
     @Transactional

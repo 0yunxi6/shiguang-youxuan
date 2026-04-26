@@ -21,6 +21,7 @@ public class CommerceFeatureTableInitializer {
                  Statement statement = connection.createStatement()) {
                 ensureProductImagesColumn(connection, statement);
                 ensureOrdersColumns(connection, statement);
+                ensureUserAddressTable(statement);
                 statement.execute("""
                         CREATE TABLE IF NOT EXISTS `product_favorite` (
                           `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -76,6 +77,28 @@ public class CommerceFeatureTableInitializer {
         addColumnIfMissing(connection, statement, "orders", "invoice_title", "ALTER TABLE `orders` ADD COLUMN `invoice_title` VARCHAR(100) DEFAULT NULL AFTER `payment_method`");
         addColumnIfMissing(connection, statement, "orders", "shipped_time", "ALTER TABLE `orders` ADD COLUMN `shipped_time` DATETIME DEFAULT NULL AFTER `update_time`");
         addColumnIfMissing(connection, statement, "orders", "completed_time", "ALTER TABLE `orders` ADD COLUMN `completed_time` DATETIME DEFAULT NULL AFTER `shipped_time`");
+    }
+
+    private void ensureUserAddressTable(Statement statement) throws SQLException {
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS `user_address` (
+                  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+                  `user_id` BIGINT NOT NULL,
+                  `receiver_name` VARCHAR(50) NOT NULL,
+                  `receiver_phone` VARCHAR(20) NOT NULL,
+                  `province` VARCHAR(50) NOT NULL,
+                  `city` VARCHAR(50) NOT NULL,
+                  `district` VARCHAR(50) DEFAULT NULL,
+                  `detail` VARCHAR(255) NOT NULL,
+                  `is_default` TINYINT(1) DEFAULT 0,
+                  `status` TINYINT DEFAULT 1,
+                  `deleted` TINYINT DEFAULT 0,
+                  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                  KEY `idx_address_user_default` (`user_id`, `is_default`, `deleted`),
+                  CONSTRAINT `fk_address_user` FOREIGN KEY (`user_id`) REFERENCES `user`(`id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """);
     }
 
     private void addColumnIfMissing(Connection connection, Statement statement, String tableName, String columnName, String alterSql) throws SQLException {

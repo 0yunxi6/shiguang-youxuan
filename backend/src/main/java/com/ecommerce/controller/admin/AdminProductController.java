@@ -9,9 +9,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/admin/products")
@@ -25,10 +27,13 @@ public class AdminProductController {
                           @RequestParam(defaultValue = "10") int size,
                           @RequestParam(required = false) String keyword,
                           @RequestParam(required = false) Long categoryId,
-                          @RequestParam(required = false) Integer status) {
+                          @RequestParam(required = false) Integer status,
+                          @RequestParam(defaultValue = "false") Boolean lowStockOnly,
+                          @RequestParam(defaultValue = "10") Integer maxStock) {
         if (status != null && isInvalidBinaryStatus(status)) {
             return Result.error("商品状态不合法");
         }
+        int lowStockThreshold = Math.min(Math.max(maxStock == null ? 10 : maxStock, 0), 99999);
         page = Math.max(page, 1);
         size = Math.min(Math.max(size, 1), 100);
         Page<Product> pageParam = new Page<>(page, size);
@@ -42,13 +47,22 @@ public class AdminProductController {
         if (status != null) {
             wrapper.eq("status", status);
         }
-        wrapper.orderByDesc("create_time");
+        if (Boolean.TRUE.equals(lowStockOnly)) {
+            wrapper.le("stock", lowStockThreshold);
+            wrapper.orderByAsc("stock").orderByDesc("create_time");
+        } else {
+            wrapper.orderByDesc("create_time");
+        }
         return Result.success(productMapper.selectPage(pageParam, wrapper));
     }
 
     @PostMapping
     public Result<?> create(@RequestBody Product product) {
         normalizeProductImages(product);
+        Result<?> validation = validateProduct(product);
+        if (validation != null) {
+            return validation;
+        }
         productMapper.insert(product);
         return Result.success("商品创建成功");
     }
@@ -57,6 +71,10 @@ public class AdminProductController {
     public Result<?> update(@PathVariable Long id, @RequestBody Product product) {
         product.setId(id);
         normalizeProductImages(product);
+        Result<?> validation = validateProduct(product);
+        if (validation != null) {
+            return validation;
+        }
         productMapper.updateById(product);
         return Result.success("商品更新成功");
     }
@@ -81,8 +99,57 @@ public class AdminProductController {
         return Result.success("状态更新成功");
     }
 
+    @PutMapping("/status/batch")
+    public Result<?> batchUpdateStatus(@RequestBody List<Long> ids, @RequestParam Integer status) {
+        if (isInvalidBinaryStatus(status)) {
+            return Result.error("商品状态不合法");
+        }
+        List<Long> validIds = ids == null ? List.of() : ids.stream()
+                .filter(Objects::nonNull)
+                .filter(id -> id > 0)
+                .distinct()
+                .toList();
+        if (validIds.isEmpty()) {
+            return Result.error("请选择要操作的商品");
+        }
+        Product product = new Product();
+        product.setStatus(status);
+        productMapper.update(product, new QueryWrapper<Product>().in("id", validIds));
+        return Result.success("批量更新成功");
+    }
+
     private boolean isInvalidBinaryStatus(Integer status) {
         return status == null || (status != 0 && status != 1);
+    }
+
+    private Result<?> validateProduct(Product product) {
+        if (product == null) {
+            return Result.error("商品信息不能为空");
+        }
+        product.setName(StringUtils.hasText(product.getName()) ? product.getName().trim() : null);
+        product.setDescription(StringUtils.hasText(product.getDescription()) ? product.getDescription().trim() : null);
+        if (!StringUtils.hasText(product.getName())) {
+            return Result.error("商品名称不能为空");
+        }
+        if (product.getName().length() > 100) {
+            return Result.error("商品名称不能超过100个字符");
+        }
+        if (product.getCategoryId() == null || product.getCategoryId() <= 0) {
+            return Result.error("请选择商品分类");
+        }
+        if (product.getPrice() == null || product.getPrice().compareTo(BigDecimal.ZERO) < 0) {
+            return Result.error("商品价格不能小于0");
+        }
+        if (product.getStock() == null || product.getStock() < 0) {
+            return Result.error("商品库存不能小于0");
+        }
+        if (product.getStatus() == null) {
+            product.setStatus(1);
+        }
+        if (isInvalidBinaryStatus(product.getStatus())) {
+            return Result.error("商品状态不合法");
+        }
+        return null;
     }
 
     private void normalizeProductImages(Product product) {

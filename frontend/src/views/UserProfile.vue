@@ -193,10 +193,71 @@
           <div class="panel-heading">
             <div>
               <h3 class="panel-title">收货地址</h3>
-              <p class="panel-subtitle">地址管理功能开发中。</p>
+              <p class="panel-subtitle">管理常用地址，结算时会自动同步默认地址。</p>
+            </div>
+            <button class="btn-mini" type="button" @click="startNewAddress">新增地址</button>
+          </div>
+          <div v-if="addresses.length === 0 && !editingAddress" class="empty-state">暂无收货地址，点击右上角新增</div>
+          <div v-else class="address-list">
+            <div v-for="addr in addresses" :key="addr.id" class="address-card">
+              <div class="address-main">
+                <div class="address-title">
+                  <strong>{{ addr.name }}</strong>
+                  <span>{{ addr.phone }}</span>
+                  <em v-if="addr.isDefault">默认</em>
+                </div>
+                <p>{{ addr.province }} {{ addr.city }} {{ addr.district }} {{ addr.detail }}</p>
+              </div>
+              <div class="address-actions">
+                <button type="button" @click="editUserAddress(addr)">编辑</button>
+                <button type="button" v-if="!addr.isDefault" @click="makeDefaultAddress(addr.id)">设为默认</button>
+                <button type="button" class="danger" @click="deleteUserAddress(addr.id)">删除</button>
+              </div>
             </div>
           </div>
-          <div class="empty-state">收货地址管理功能开发中</div>
+
+          <form v-if="editingAddress" class="address-form" @submit.prevent="saveUserAddress">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>收货人</label>
+                <input v-model="addressForm.name" required placeholder="请输入收货人" />
+              </div>
+              <div class="form-group">
+                <label>手机号</label>
+                <input v-model="addressForm.phone" required pattern="^1[3-9]\d{9}$" placeholder="请输入手机号" />
+              </div>
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>省份</label>
+                <input v-model="addressForm.province" required placeholder="如：广东省" />
+              </div>
+              <div class="form-group">
+                <label>城市</label>
+                <input v-model="addressForm.city" required placeholder="如：深圳市" />
+              </div>
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>区县</label>
+                <input v-model="addressForm.district" placeholder="如：南山区" />
+              </div>
+              <div class="form-group">
+                <label>详细地址</label>
+                <input v-model="addressForm.detail" required placeholder="街道、门牌号等" />
+              </div>
+            </div>
+            <label class="default-check">
+              <input v-model="addressForm.isDefault" type="checkbox" />
+              设为默认地址
+            </label>
+            <div class="form-actions">
+              <button type="button" class="btn-cancel" @click="cancelAddressEdit">取消</button>
+              <button type="submit" class="btn-save" :disabled="addressSaving">
+                {{ addressSaving ? '保存中...' : '保存地址' }}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
@@ -206,8 +267,22 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getUserProfile, updateProfile, updatePassword, getOrderList, uploadFile, getFavorites, getCoupons } from '../api'
+import {
+  getUserProfile,
+  updateProfile,
+  updatePassword,
+  getOrderList,
+  uploadFile,
+  getFavorites,
+  getCoupons,
+  getAddresses,
+  createAddress as createAddressApi,
+  updateAddress as updateAddressApi,
+  deleteAddress as deleteAddressApi,
+  setDefaultAddress
+} from '../api'
 import { useUserStore } from '../store/user'
+import { storage } from '../utils/storage'
 import { ElMessage } from 'element-plus'
 import { Camera } from '@element-plus/icons-vue'
 import UserAvatar from '../components/UserAvatar.vue'
@@ -221,7 +296,9 @@ const changingPwd = ref(false)
 const orders = ref([])
 const favorites = ref([])
 const coupons = ref([])
+const addresses = ref([])
 const pwdError = ref('')
+const addressSaving = ref(false)
 
 const avatarInput = ref(null)
 const triggerAvatarUpload = () => avatarInput.value?.click()
@@ -253,6 +330,17 @@ const tabs = [
 
 const profileForm = reactive({ nickname: '', email: '', phone: '' })
 const passwordForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
+const editingAddress = ref(null)
+const addressForm = reactive({
+  id: null,
+  name: '',
+  phone: '',
+  province: '',
+  city: '',
+  district: '',
+  detail: '',
+  isDefault: false
+})
 
 const formatDate = (time) => time ? new Date(time).toLocaleDateString('zh-CN') : ''
 
@@ -318,6 +406,106 @@ const loadCoupons = async () => {
   }
 }
 
+const toViewAddress = (address) => ({
+  id: address.id,
+  name: address.receiverName || address.name || '',
+  phone: address.receiverPhone || address.phone || '',
+  province: address.province || '',
+  city: address.city || '',
+  district: address.district || '',
+  detail: address.detail || '',
+  isDefault: address.isDefault === true || address.isDefault === 1
+})
+
+const toApiAddress = () => ({
+  receiverName: addressForm.name,
+  receiverPhone: addressForm.phone,
+  province: addressForm.province,
+  city: addressForm.city,
+  district: addressForm.district,
+  detail: addressForm.detail,
+  isDefault: addressForm.isDefault
+})
+
+const resetAddressForm = () => {
+  Object.assign(addressForm, {
+    id: null,
+    name: '',
+    phone: '',
+    province: '',
+    city: '',
+    district: '',
+    detail: '',
+    isDefault: addresses.value.length === 0
+  })
+}
+
+const loadAddresses = async () => {
+  try {
+    const res = await getAddresses()
+    addresses.value = (res.data || []).map(toViewAddress)
+    storage.setJSON('checkoutAddresses', addresses.value)
+  } catch (error) {
+    addresses.value = storage.getJSON('checkoutAddresses', [])
+  }
+}
+
+const startNewAddress = () => {
+  editingAddress.value = { id: null }
+  resetAddressForm()
+}
+
+const editUserAddress = (address) => {
+  editingAddress.value = address
+  Object.assign(addressForm, address)
+}
+
+const cancelAddressEdit = () => {
+  editingAddress.value = null
+  resetAddressForm()
+}
+
+const saveUserAddress = async () => {
+  addressSaving.value = true
+  try {
+    if (addressForm.id) {
+      await updateAddressApi(addressForm.id, toApiAddress())
+      ElMessage.success('地址已更新')
+    } else {
+      await createAddressApi(toApiAddress())
+      ElMessage.success('地址已新增')
+    }
+    editingAddress.value = null
+    await loadAddresses()
+    resetAddressForm()
+  } catch (error) {
+    ElMessage.error('地址保存失败')
+  } finally {
+    addressSaving.value = false
+  }
+}
+
+const deleteUserAddress = async (id) => {
+  try {
+    await deleteAddressApi(id)
+    ElMessage.success('地址已删除')
+    await loadAddresses()
+    if (addressForm.id === id) cancelAddressEdit()
+  } catch (error) {
+    ElMessage.error('删除失败')
+  }
+}
+
+const makeDefaultAddress = async (id) => {
+  try {
+    await setDefaultAddress(id)
+    ElMessage.success('默认地址已更新')
+    await loadAddresses()
+  } catch (error) {
+    ElMessage.error('设置失败')
+  }
+}
+
 const couponStatusText = (coupon) => {
   if (coupon?.status === 1) return '已使用'
   if (coupon?.status === 2) return '已过期'
@@ -330,7 +518,7 @@ const couponStatusClass = (coupon) => {
   return coupon?.canUse === false ? 'disabled' : 'active'
 }
 
-onMounted(() => { loadProfile(); loadOrders(); loadFavorites(); loadCoupons() })
+onMounted(() => { loadProfile(); loadOrders(); loadFavorites(); loadCoupons(); loadAddresses() })
 </script>
 
 <style scoped>
@@ -819,6 +1007,126 @@ onMounted(() => { loadProfile(); loadOrders(); loadFavorites(); loadCoupons() })
   color: #fff;
   font-size: 12px;
   font-weight: 600;
+}
+
+.btn-mini {
+  border: none;
+  border-radius: 10px;
+  background: #111827;
+  color: #fff;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.address-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.address-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #edf0f5;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.address-main {
+  min-width: 0;
+}
+
+.address-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.address-title strong {
+  color: #303133;
+}
+
+.address-title span {
+  color: #606266;
+  font-size: 13px;
+}
+
+.address-title em {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fdf0ec;
+  color: #c45c3e;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.address-main p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.address-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.address-actions button,
+.btn-cancel {
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  background: #fff;
+  color: #606266;
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.address-actions button:hover,
+.btn-cancel:hover {
+  border-color: #c45c3e;
+  color: #c45c3e;
+}
+
+.address-actions button.danger {
+  color: #f56c6c;
+}
+
+.address-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px dashed #dcdfe6;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.default-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  color: #606266;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .empty-state {

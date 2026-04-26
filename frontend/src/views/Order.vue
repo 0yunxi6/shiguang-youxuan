@@ -2,6 +2,17 @@
   <div class="order-page">
     <h1 class="page-title">我的订单</h1>
 
+    <div class="status-tabs">
+      <button
+        v-for="tab in statusTabs"
+        :key="tab.value === null ? 'all' : tab.value"
+        :class="{ active: currentStatus === tab.value }"
+        @click="changeStatus(tab.value)"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
+
     <div v-if="loading" class="order-list">
       <div v-for="i in 3" :key="i" class="order-card">
         <div class="order-header">
@@ -52,11 +63,17 @@
             <span class="order-time">{{ formatTime(order.createTime) }}</span>
           </div>
           <div class="order-total-wrap">
+            <div class="price-breakdown">
+              <span v-if="Number(order.originalAmount || 0) > 0">商品 ¥{{ formatAmount(order.originalAmount) }}</span>
+              <span v-if="Number(order.discountAmount || 0) > 0" class="discount">优惠 -¥{{ formatAmount(order.discountAmount) }}</span>
+              <span>运费 {{ Number(order.shippingFee || 0) === 0 ? '免运费' : '¥' + formatAmount(order.shippingFee) }}</span>
+            </div>
             <div class="order-total">
               <span class="total-label">合计</span>
               <span class="total-amount">¥{{ formatAmount(order.totalAmount) }}</span>
             </div>
             <div class="order-actions">
+              <button v-if="order.status === 0" class="btn-action pay" :disabled="actionLoadingId === order.id" @click="handlePay(order)">立即支付</button>
               <button v-if="order.canCancel" class="btn-action ghost" :disabled="actionLoadingId === order.id" @click="handleCancel(order)">取消订单</button>
               <button v-if="order.canConfirm" class="btn-action primary" :disabled="actionLoadingId === order.id" @click="handleConfirm(order)">确认收货</button>
             </div>
@@ -69,22 +86,37 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { cancelOrder, confirmOrder, getOrderList } from '../api'
+import { cancelOrder, confirmOrder, getOrderList, payOrder } from '../api'
 import { ElMessage } from 'element-plus'
 
 const orders = ref([])
 const loading = ref(true)
 const actionLoadingId = ref(null)
+const currentStatus = ref(null)
 
 const statusTexts = ['待支付', '已支付', '已发货', '已完成', '已取消']
+const statusTabs = [
+  { label: '全部', value: null },
+  { label: '待支付', value: 0 },
+  { label: '待发货', value: 1 },
+  { label: '待收货', value: 2 },
+  { label: '已完成', value: 3 },
+  { label: '已取消', value: 4 }
+]
 
 const loadOrders = async () => {
   loading.value = true
   try {
-    const res = await getOrderList()
+    const params = currentStatus.value === null ? undefined : { status: currentStatus.value }
+    const res = await getOrderList(params)
     orders.value = res.data
   } catch (error) { console.error(error) }
   finally { loading.value = false }
+}
+
+const changeStatus = (status) => {
+  currentStatus.value = status
+  loadOrders()
 }
 
 const formatTime = (time) => {
@@ -114,6 +146,17 @@ const handleCancel = async (order) => {
   }
 }
 
+const handlePay = async (order) => {
+  actionLoadingId.value = order.id
+  try {
+    await payOrder(order.id)
+    ElMessage.success('支付成功')
+    await loadOrders()
+  } finally {
+    actionLoadingId.value = null
+  }
+}
+
 const handleConfirm = async (order) => {
   actionLoadingId.value = order.id
   try {
@@ -131,6 +174,34 @@ onMounted(() => { loadOrders() })
 <style scoped>
 .order-page { max-width: 800px; margin: 0 auto; padding: 0 24px; }
 .page-title { font-size: 28px; font-weight: 700; color: #111; margin: 0 0 32px; }
+
+.status-tabs {
+  display: flex;
+  gap: 8px;
+  margin: -12px 0 24px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.status-tabs button {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid #e5e5e5;
+  background: #fff;
+  color: #666;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.status-tabs button:hover,
+.status-tabs button.active {
+  border-color: #111;
+  background: #111;
+  color: #fff;
+}
 
 .order-list { display: flex; flex-direction: column; gap: 16px; }
 
@@ -169,6 +240,15 @@ onMounted(() => { loadOrders() })
 .order-info span { font-size: 13px; color: #666; }
 .order-time { font-size: 12px; color: #bbb; }
 .order-total-wrap { display: flex; align-items: center; gap: 12px; }
+.price-breakdown {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 12px;
+  color: #999;
+}
+.price-breakdown .discount { color: #67c23a; }
 .order-total { display: flex; align-items: baseline; gap: 6px; }
 .total-label { font-size: 13px; color: #999; }
 .total-amount { font-size: 22px; font-weight: 700; color: #e74c3c; }
@@ -178,8 +258,10 @@ onMounted(() => { loadOrders() })
   font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;
 }
 .btn-action.primary { background: #111; color: #fff; border-color: #111; }
+.btn-action.pay { background: #c45c3e; color: #fff; border-color: #c45c3e; }
 .btn-action.ghost:hover { border-color: #111; color: #111; }
 .btn-action.primary:hover { opacity: 0.9; }
+.btn-action.pay:hover { opacity: 0.9; }
 .btn-action:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .empty-state { text-align: center; padding: 80px 0; }

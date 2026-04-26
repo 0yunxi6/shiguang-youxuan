@@ -7,6 +7,7 @@ import com.ecommerce.util.Result;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
+import java.util.List;
 
 @RestController
 @RequestMapping("/products")
@@ -39,6 +40,12 @@ public class ProductController {
             @RequestParam(required = false) BigDecimal maxPrice,
             @RequestParam(required = false) Boolean inStockOnly) {
         return getProductList(page, size, categoryId, keyword, sort, minPrice, maxPrice, inStockOnly);
+    }
+
+    @GetMapping("/{id}/recommendations")
+    public Result<List<Product>> getRecommendations(@PathVariable Long id,
+                                                    @RequestParam(defaultValue = "4") int limit) {
+        return Result.success(productService.getRecommendations(id, limit));
     }
     
     @GetMapping("/{id}")

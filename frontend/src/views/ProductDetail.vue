@@ -285,6 +285,7 @@ import {
   getProductDetail,
   addToCart,
   getProductList,
+  getProductRecommendations,
   getProductReviews,
   getProductReviewSummary,
   createProductReview,
@@ -358,11 +359,33 @@ const renderStars = (rating = 0) => {
   return '★'.repeat(value) + '☆'.repeat(5 - value)
 }
 
+const rememberProduct = (item) => {
+  if (!item?.id) return
+  try {
+    const key = 'recentlyViewedProducts'
+    const current = JSON.parse(localStorage.getItem(key) || '[]')
+    const next = [
+      {
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        imageUrl: item.imageUrl,
+        viewedAt: Date.now()
+      },
+      ...current.filter(p => p.id !== item.id)
+    ].slice(0, 12)
+    localStorage.setItem(key, JSON.stringify(next))
+  } catch (error) {
+    // ignore private mode/localStorage errors
+  }
+}
+
 const loadProduct = async () => {
   loading.value = true
   try {
     const res = await getProductDetail(route.params.id)
     product.value = res.data
+    rememberProduct(product.value)
     isFavorited.value = !!res.data?.favorited
     quantity.value = 1
     currentImageIndex.value = 0
@@ -377,16 +400,25 @@ const loadProduct = async () => {
     // Load related products
     if (product.value?.categoryId) {
       try {
-        const relatedRes = await getProductList({
-          page: 1,
-          size: 4,
-          categoryId: product.value.categoryId
-        })
+        const relatedRes = await getProductRecommendations(product.value.id, { limit: 4 })
         relatedProducts.value = (relatedRes.data?.records || relatedRes.data || [])
           .filter(p => p.id !== product.value.id)
           .slice(0, 4)
       } catch (e) {
-        console.error(e)
+        try {
+          const fallbackRes = await getProductList({
+            page: 1,
+            size: 4,
+            categoryId: product.value.categoryId,
+            sort: 'sales',
+            inStockOnly: true
+          })
+          relatedProducts.value = (fallbackRes.data?.records || fallbackRes.data || [])
+            .filter(p => p.id !== product.value.id)
+            .slice(0, 4)
+        } catch (fallbackError) {
+          relatedProducts.value = []
+        }
       }
     }
     await Promise.all([loadReviewSummary(), loadReviews(true)])

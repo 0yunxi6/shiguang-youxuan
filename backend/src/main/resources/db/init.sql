@@ -71,6 +71,25 @@ CREATE TABLE IF NOT EXISTS `cart` (
   FOREIGN KEY (`product_id`) REFERENCES `product`(`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 用户收货地址表
+CREATE TABLE IF NOT EXISTS `user_address` (
+  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL,
+  `receiver_name` VARCHAR(50) NOT NULL,
+  `receiver_phone` VARCHAR(20) NOT NULL,
+  `province` VARCHAR(50) NOT NULL,
+  `city` VARCHAR(50) NOT NULL,
+  `district` VARCHAR(50) DEFAULT NULL,
+  `detail` VARCHAR(255) NOT NULL,
+  `is_default` TINYINT(1) DEFAULT 0,
+  `status` TINYINT DEFAULT 1,
+  `deleted` TINYINT DEFAULT 0,
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY `idx_address_user_default` (`user_id`, `is_default`, `deleted`),
+  FOREIGN KEY (`user_id`) REFERENCES `user`(`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 订单表
 CREATE TABLE IF NOT EXISTS `orders` (
   `id` BIGINT PRIMARY KEY AUTO_INCREMENT,

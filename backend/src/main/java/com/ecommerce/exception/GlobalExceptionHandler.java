@@ -5,6 +5,7 @@ import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
@@ -24,9 +25,10 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(BusinessException.class)
-    public Result<?> handleBusinessException(BusinessException e) {
+    public ResponseEntity<Result<?>> handleBusinessException(BusinessException e) {
         log.warn("业务异常: {}", e.getMessage());
-        return Result.error(e.getCode(), e.getMessage());
+        return ResponseEntity.status(resolveHttpStatus(e.getCode()))
+                .body(Result.error(e.getCode(), e.getMessage()));
     }
 
     @ExceptionHandler(BadCredentialsException.class)
@@ -97,5 +99,19 @@ public class GlobalExceptionHandler {
     public Result<?> handleException(Exception e) {
         log.error("系统异常: ", e);
         return Result.error(500, "系统内部错误，请稍后重试");
+    }
+
+    private HttpStatus resolveHttpStatus(Integer code) {
+        if (code == null) {
+            return HttpStatus.BAD_REQUEST;
+        }
+        try {
+            if (code >= 400 && code <= 599) {
+                return HttpStatus.valueOf(code);
+            }
+        } catch (IllegalArgumentException ignored) {
+            return HttpStatus.BAD_REQUEST;
+        }
+        return HttpStatus.BAD_REQUEST;
     }
 }

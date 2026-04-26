@@ -67,6 +67,22 @@
       </div>
     </section>
 
+    <section class="section recent-section" v-if="recentlyViewed.length">
+      <div class="section-bar">
+        <h2>最近浏览</h2>
+        <button class="see-more clear-recent" @click="clearRecentlyViewed">清空记录</button>
+      </div>
+      <div class="recent-row">
+        <div v-for="item in recentlyViewed" :key="item.id" class="recent-item" @click="$router.push(`/product/${item.id}`)">
+          <img :src="item.imageUrl || '/placeholder.svg'" :alt="item.name" />
+          <div>
+            <strong>{{ item.name }}</strong>
+            <span>¥{{ Number(item.price || 0).toFixed(2) }}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="trust-bar">
       <div class="trust-item" v-for="f in trustItems" :key="f.title">
         <svg v-html="f.svg" width="20" height="20" viewBox="0 0 20 20" fill="none"></svg>
@@ -109,6 +125,7 @@ const banners = [
   { tag: '会员专享', title: '每周上新，惊喜不断', desc: '注册即享新人专属优惠', bg: 'linear-gradient(135deg, #5a6e5a 0%, #3d4d3d 100%)', cta: '了解详情', link: '/search?keyword=推荐' }
 ]
 const flashProducts = ref([])
+const recentlyViewed = ref([])
 const countdown = reactive({ hours: '00', minutes: '00', seconds: '00' })
 let countdownTimer = null
 const sortTabs = [{ label: '综合', value: 'default' }, { label: '销量', value: 'sales' }, { label: '价格', value: 'price_asc' }, { label: '最新', value: 'newest' }]
@@ -146,6 +163,18 @@ const loadMore = async () => { if (products.value.length >= total.value) return;
 const changeSort = (s) => { currentSort.value = s; loadProducts() }
 const clearCategory = () => { selectedCategory.value = null; loadProducts() }
 const toggleFavorite = (p) => { ElMessage.success(p._favorited ? '已取消收藏' : '已添加收藏') }
+const loadRecentlyViewed = () => {
+  try {
+    recentlyViewed.value = JSON.parse(localStorage.getItem('recentlyViewedProducts') || '[]').slice(0, 6)
+  } catch (error) {
+    recentlyViewed.value = []
+  }
+}
+const clearRecentlyViewed = () => {
+  localStorage.removeItem('recentlyViewedProducts')
+  recentlyViewed.value = []
+  ElMessage.success('浏览记录已清空')
+}
 onMounted(async () => {
   try {
     const [prodRes] = await Promise.all([getProductList({ page: 1, size: 12 }), categoryStore.fetchCategories()])
@@ -153,6 +182,7 @@ onMounted(async () => {
     total.value = prodRes.data?.total || products.value.length
     flashProducts.value = products.value.slice(0, 4)
   } catch (e) { console.error(e) } finally { loading.value = false }
+  loadRecentlyViewed()
   startAutoPlay(); updateCountdown(); countdownTimer = setInterval(updateCountdown, 1000)
 })
 onUnmounted(() => { pauseAutoPlay(); clearInterval(countdownTimer) })
@@ -230,6 +260,58 @@ onUnmounted(() => { pauseAutoPlay(); clearInterval(countdownTimer) })
 .load-more button:hover { border-color: #999; }
 .load-more button:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* Recently viewed */
+.clear-recent {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+.recent-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.recent-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #f0eeea;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.recent-item:hover {
+  border-color: #d0cec8;
+  transform: translateY(-1px);
+}
+.recent-item img {
+  width: 58px;
+  height: 58px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #f7f7f5;
+}
+.recent-item div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.recent-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #333;
+  font-size: 13px;
+}
+.recent-item span {
+  color: var(--color-price, #c45c3e);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 /* Trust Bar */
 .trust-bar { display: flex; justify-content: space-between; padding: 24px 0; border-top: 1px solid #eee; margin-top: 12px; }
 .trust-item { display: flex; align-items: center; gap: 10px; }
@@ -249,6 +331,7 @@ onUnmounted(() => { pauseAutoPlay(); clearInterval(countdownTimer) })
   .slide-inner { padding: 36px 24px; }
   .slide-title { font-size: 22px; }
   .product-grid, .flash-row { grid-template-columns: repeat(2, 1fr); }
+  .recent-row { grid-template-columns: 1fr; }
   .trust-bar { flex-wrap: wrap; gap: 16px; }
   .trust-item { flex: 0 0 calc(50% - 8px); }
   .carousel-nav { left: 24px; }

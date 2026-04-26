@@ -2,10 +2,13 @@
   <div class="manage-page">
     <div class="page-header">
       <h2>订单管理</h2>
-      <div class="header-stats">
-        <span class="stat-badge warning" v-if="pendingCount > 0">
-          {{ pendingCount }} 待处理
-        </span>
+      <div class="header-actions">
+        <button class="btn-export" @click="exportOrders" :disabled="!orders.length">导出当前页</button>
+        <div class="header-stats">
+          <span class="stat-badge warning" v-if="pendingCount > 0">
+            {{ pendingCount }} 待处理
+          </span>
+        </div>
       </div>
     </div>
 
@@ -14,24 +17,35 @@
         <Search class="search-icon" />
         <input
           v-model="keyword"
-          placeholder="搜索订单号"
+          placeholder="搜索订单号/收货人/手机号"
           class="filter-input"
-          @keyup.enter="loadOrders"
+          @keyup.enter="applyFilters"
         />
       </div>
-      <select v-model="statusFilter" class="filter-select" @change="loadOrders">
+      <select v-model="statusFilter" class="filter-select" @change="applyFilters">
         <option :value="null">全部状态</option>
         <option v-for="(text, idx) in statusText" :key="idx" :value="idx">{{ text }}</option>
       </select>
-      <button class="btn-search" @click="loadOrders">
+      <button class="btn-search" @click="applyFilters">
         <Search /> 搜索
       </button>
+    </div>
+
+    <div class="batch-bar" v-if="selectedOrderIds.length">
+      <span>已选择 {{ selectedOrderIds.length }} 个订单</span>
+      <button class="btn-batch" @click="batchUpdateStatus(2)">批量发货</button>
+      <button class="btn-batch ok" @click="batchUpdateStatus(3)">批量完成</button>
+      <button class="btn-batch danger" @click="batchUpdateStatus(4)">批量取消</button>
+      <button class="btn-link" @click="selectedOrderIds = []">取消选择</button>
     </div>
 
     <div class="table-wrap">
       <table class="data-table">
         <thead>
           <tr>
+            <th style="width:44px">
+              <input type="checkbox" :checked="allPageSelected" @change="toggleSelectAll" />
+            </th>
             <th style="width:60px">ID</th>
             <th>订单号</th>
             <th style="width:100px">金额</th>
@@ -44,6 +58,9 @@
         </thead>
         <tbody>
           <tr v-for="row in orders" :key="row.id">
+            <td>
+              <input v-model="selectedOrderIds" type="checkbox" :value="row.id" />
+            </td>
             <td>{{ row.id }}</td>
             <td class="mono">{{ row.orderNo }}</td>
             <td class="price">¥{{ row.totalAmount }}</td>
@@ -151,6 +168,25 @@
             </div>
           </div>
         </div>
+        <div class="detail-section" v-if="currentOrder.items?.length">
+          <h4 class="section-title">商品明细</h4>
+          <div class="detail-items">
+            <div v-for="item in currentOrder.items" :key="item.id" class="detail-product">
+              <img :src="item.productImage || '/placeholder.svg'" />
+              <div class="detail-product-copy">
+                <strong>{{ item.productName }}</strong>
+                <span>¥{{ item.price }} × {{ item.quantity }}</span>
+              </div>
+              <span class="price">¥{{ item.totalAmount }}</span>
+            </div>
+          </div>
+          <div class="detail-totals">
+            <span v-if="Number(currentOrder.originalAmount || 0) > 0">商品总价：¥{{ formatAmount(currentOrder.originalAmount) }}</span>
+            <span v-if="Number(currentOrder.discountAmount || 0) > 0">优惠：-¥{{ formatAmount(currentOrder.discountAmount) }}</span>
+            <span>运费：{{ Number(currentOrder.shippingFee || 0) === 0 ? '免运费' : '¥' + formatAmount(currentOrder.shippingFee) }}</span>
+            <strong>实付：¥{{ formatAmount(currentOrder.totalAmount) }}</strong>
+          </div>
+        </div>
       </div>
       <template #footer>
         <el-button @click="detailVisible = false">关闭</el-button>
@@ -192,6 +228,7 @@ const statusFilter = ref(null)
 const page = ref(1)
 const pageSize = 10
 const total = ref(0)
+const selectedOrderIds = ref([])
 
 const detailVisible = ref(false)
 const currentOrder = ref(null)
@@ -205,6 +242,8 @@ const pendingCount = computed(() => {
   return orders.value.filter(o => o.status === 1).length
 })
 
+const allPageSelected = computed(() => orders.value.length > 0 && orders.value.every(row => selectedOrderIds.value.includes(row.id)))
+
 const loadOrders = async () => {
   loading.value = true
   try {
@@ -212,7 +251,7 @@ const loadOrders = async () => {
       params: {
         page: page.value,
         size: pageSize,
-        orderNo: keyword.value,
+        keyword: keyword.value,
         status: statusFilter.value
       }
     })
@@ -221,6 +260,7 @@ const loadOrders = async () => {
       _originalStatus: o.status
     }))
     total.value = res.data?.total || orders.value.length
+    selectedOrderIds.value = selectedOrderIds.value.filter(id => orders.value.some(row => row.id === id))
   } catch (e) {
     console.error(e)
   } finally {
@@ -228,9 +268,32 @@ const loadOrders = async () => {
   }
 }
 
-const viewDetail = (row) => {
-  currentOrder.value = row
+const toggleSelectAll = (event) => {
+  if (event.target.checked) {
+    selectedOrderIds.value = Array.from(new Set([...selectedOrderIds.value, ...orders.value.map(row => row.id)]))
+  } else {
+    const pageIds = new Set(orders.value.map(row => row.id))
+    selectedOrderIds.value = selectedOrderIds.value.filter(id => !pageIds.has(id))
+  }
+}
+
+const applyFilters = () => {
+  page.value = 1
+  loadOrders()
+}
+
+const viewDetail = async (row) => {
+  currentOrder.value = { ...row, items: [] }
   detailVisible.value = true
+  try {
+    const res = await request.get(`/admin/orders/${row.id}`)
+    currentOrder.value = {
+      ...(res.data?.order || row),
+      items: res.data?.items || []
+    }
+  } catch (error) {
+    currentOrder.value = row
+  }
 }
 
 const updateStatus = async (row) => {
@@ -270,6 +333,48 @@ const confirmShip = async () => {
   }
 }
 
+const batchUpdateStatus = async (status) => {
+  if (!selectedOrderIds.value.length) return
+  try {
+    await request.put('/admin/orders/status/batch', selectedOrderIds.value, { params: { status } })
+    ElMessage.success('批量更新成功')
+    selectedOrderIds.value = []
+    loadOrders()
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+const formatAmount = (amount) => Number(amount || 0).toFixed(2)
+const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+const downloadCsv = (filename, rows) => {
+  const content = '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\n')
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+const exportOrders = () => {
+  const rows = [
+    ['ID', '订单号', '金额', '状态', '收货人', '手机号', '地址', '下单时间'],
+    ...orders.value.map(row => [
+      row.id,
+      row.orderNo,
+      row.totalAmount,
+      statusText[row.status] || '未知',
+      row.receiverName,
+      row.receiverPhone,
+      row.receiverAddress,
+      row.createTime
+    ])
+  ]
+  downloadCsv(`orders-page-${page.value}.csv`, rows)
+}
+
 onMounted(() => {
   loadOrders()
 })
@@ -290,9 +395,36 @@ onMounted(() => {
   margin: 0;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .header-stats {
   display: flex;
   gap: 12px;
+}
+
+.btn-export {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1.5px solid #e5e7eb;
+  background: #fff;
+  color: #666;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-export:hover:not(:disabled) {
+  border-color: #333;
+  color: #333;
+}
+
+.btn-export:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .stat-badge {
@@ -385,6 +517,47 @@ onMounted(() => {
 .btn-search:hover {
   border-color: #333;
   color: #333;
+}
+
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: #fafaf8;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  color: #666;
+  font-size: 13px;
+}
+
+.btn-batch {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #409eff;
+  background: #ecf5ff;
+  color: #409eff;
+  cursor: pointer;
+}
+
+.btn-batch.ok {
+  border-color: #67c23a;
+  background: #f0faf4;
+  color: #67c23a;
+}
+
+.btn-batch.danger {
+  border-color: #f56c6c;
+  background: #fef0f0;
+  color: #f56c6c;
+}
+
+.btn-link {
+  border: none;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
 }
 
 .table-wrap {
@@ -631,5 +804,61 @@ onMounted(() => {
 .value.price {
   color: #f56c6c;
   font-weight: 600;
+}
+
+.detail-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-product {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fafaf8;
+}
+
+.detail-product img {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #fff;
+}
+
+.detail-product-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.detail-product-copy strong {
+  color: #303133;
+  font-size: 14px;
+}
+
+.detail-product-copy span {
+  color: #909399;
+  font-size: 12px;
+}
+
+.detail-totals {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  color: #606266;
+  font-size: 13px;
+}
+
+.detail-totals strong {
+  color: #f56c6c;
 }
 </style>

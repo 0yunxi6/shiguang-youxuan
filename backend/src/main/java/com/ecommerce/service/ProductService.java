@@ -108,6 +108,46 @@ public class ProductService {
         return product;
     }
 
+    public List<Product> getRecommendations(Long productId, int limit) {
+        if (productId == null || productId <= 0) {
+            return List.of();
+        }
+        Product current = productMapper.selectById(productId);
+        if (current == null || current.getStatus() == null || current.getStatus() != 1) {
+            return List.of();
+        }
+        int safeLimit = Math.min(Math.max(limit, 1), 12);
+        QueryWrapper<Product> wrapper = new QueryWrapper<>();
+        wrapper.eq("status", 1)
+                .ne("id", productId)
+                .gt("stock", 0);
+        if (current.getCategoryId() != null) {
+            wrapper.eq("category_id", current.getCategoryId());
+        }
+        wrapper.orderByDesc("(SELECT COALESCE(SUM(oi.quantity), 0) FROM order_item oi WHERE oi.product_id = product.id)")
+                .orderByDesc("create_time")
+                .last("LIMIT " + safeLimit);
+        List<Product> products = productMapper.selectList(wrapper);
+
+        if (products.size() < safeLimit && current.getCategoryId() != null) {
+            List<Long> existingIds = products.stream().map(Product::getId).collect(Collectors.toList());
+            QueryWrapper<Product> fallback = new QueryWrapper<>();
+            fallback.eq("status", 1)
+                    .ne("id", productId)
+                    .gt("stock", 0);
+            if (!existingIds.isEmpty()) {
+                fallback.notIn("id", existingIds);
+            }
+            fallback.orderByDesc("(SELECT COALESCE(SUM(oi.quantity), 0) FROM order_item oi WHERE oi.product_id = product.id)")
+                    .orderByDesc("create_time")
+                    .last("LIMIT " + (safeLimit - products.size()));
+            products = new java.util.ArrayList<>(products);
+            products.addAll(productMapper.selectList(fallback));
+        }
+        enrichProducts(products);
+        return products;
+    }
+
     public List<Product> getProductsByCategory(Long categoryId) {
         List<Product> products = productMapper.findByCategoryId(categoryId);
         enrichProducts(products);

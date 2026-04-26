@@ -2,9 +2,12 @@
   <div class="manage-page">
     <div class="page-header">
       <h2>商品管理</h2>
-      <button class="btn-add" @click="openDialog(null)">
-        <Plus /> 新增商品
-      </button>
+      <div class="header-actions">
+        <button class="btn-export" @click="exportProducts" :disabled="!products.length">导出当前页</button>
+        <button class="btn-add" @click="openDialog(null)">
+          <Plus /> 新增商品
+        </button>
+      </div>
     </div>
 
     <div class="filter-bar">
@@ -14,27 +17,41 @@
           v-model="keyword"
           placeholder="搜索商品名称"
           class="filter-input"
-          @keyup.enter="loadProducts"
+          @keyup.enter="applyFilters"
         />
       </div>
-      <select v-model="categoryId" class="filter-select" @change="loadProducts">
+      <select v-model="categoryId" class="filter-select" @change="applyFilters">
         <option :value="null">全部分类</option>
         <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
       </select>
-      <select v-model="statusFilter" class="filter-select" @change="loadProducts">
+      <select v-model="statusFilter" class="filter-select" @change="applyFilters">
         <option :value="null">全部状态</option>
         <option :value="1">上架</option>
         <option :value="0">下架</option>
       </select>
-      <button class="btn-search" @click="loadProducts">
+      <label class="filter-check">
+        <input v-model="lowStockOnly" type="checkbox" @change="applyFilters" />
+        库存预警
+      </label>
+      <button class="btn-search" @click="applyFilters">
         <Search /> 搜索
       </button>
+    </div>
+
+    <div class="batch-bar" v-if="selectedProductIds.length">
+      <span>已选择 {{ selectedProductIds.length }} 个商品</span>
+      <button class="btn-batch" @click="batchUpdateStatus(1)">批量上架</button>
+      <button class="btn-batch warn" @click="batchUpdateStatus(0)">批量下架</button>
+      <button class="btn-link" @click="selectedProductIds = []">取消选择</button>
     </div>
 
     <div class="table-wrap">
       <table class="data-table">
         <thead>
           <tr>
+            <th style="width:44px">
+              <input type="checkbox" :checked="allPageSelected" @change="toggleSelectAll" />
+            </th>
             <th style="width:60px">ID</th>
             <th style="width:80px">图片</th>
             <th>商品名称</th>
@@ -46,6 +63,9 @@
         </thead>
         <tbody>
           <tr v-for="row in products" :key="row.id">
+            <td>
+              <input v-model="selectedProductIds" type="checkbox" :value="row.id" />
+            </td>
             <td>{{ row.id }}</td>
             <td>
               <div class="thumb-wrap">
@@ -230,10 +250,12 @@ const isEdit = ref(false)
 const keyword = ref('')
 const categoryId = ref(null)
 const statusFilter = ref(null)
+const lowStockOnly = ref(false)
 const page = ref(1)
 const pageSize = 10
 const total = ref(0)
 const formRef = ref(null)
+const selectedProductIds = ref([])
 
 const deleteVisible = ref(false)
 const deleteTarget = ref(null)
@@ -256,6 +278,7 @@ const form = reactive({
 })
 
 const formImages = computed(() => getProductImages(form))
+const allPageSelected = computed(() => products.value.length > 0 && products.value.every(row => selectedProductIds.value.includes(row.id)))
 
 const rules = {
   name: [
@@ -279,15 +302,32 @@ const loadProducts = async () => {
         size: pageSize,
         keyword: keyword.value,
         categoryId: categoryId.value,
-        status: statusFilter.value
+        status: statusFilter.value,
+        lowStockOnly: lowStockOnly.value,
+        maxStock: 10
       }
     })
     products.value = res.data?.records || res.data || []
     total.value = res.data?.total || products.value.length
+    selectedProductIds.value = selectedProductIds.value.filter(id => products.value.some(row => row.id === id))
   } catch (e) {
     console.error(e)
   } finally {
     loading.value = false
+  }
+}
+
+const applyFilters = () => {
+  page.value = 1
+  loadProducts()
+}
+
+const toggleSelectAll = (event) => {
+  if (event.target.checked) {
+    selectedProductIds.value = Array.from(new Set([...selectedProductIds.value, ...products.value.map(row => row.id)]))
+  } else {
+    const pageIds = new Set(products.value.map(row => row.id))
+    selectedProductIds.value = selectedProductIds.value.filter(id => !pageIds.has(id))
   }
 }
 
@@ -373,6 +413,46 @@ const toggleStatus = async (row) => {
   }
 }
 
+const batchUpdateStatus = async (status) => {
+  if (!selectedProductIds.value.length) return
+  try {
+    await request.put('/admin/products/status/batch', selectedProductIds.value, { params: { status } })
+    ElMessage.success(status === 1 ? '批量上架成功' : '批量下架成功')
+    selectedProductIds.value = []
+    loadProducts()
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+const downloadCsv = (filename, rows) => {
+  const content = '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\n')
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+const exportProducts = () => {
+  const rows = [
+    ['ID', '商品名称', '分类', '价格', '库存', '状态', '图片'],
+    ...products.value.map(row => [
+      row.id,
+      row.name,
+      categories.value.find(c => c.id === row.categoryId)?.name || row.categoryName || '',
+      row.price,
+      row.stock,
+      row.status === 1 ? '上架' : '下架',
+      getProductImages(row).join(' ')
+    ])
+  ]
+  downloadCsv(`products-page-${page.value}.csv`, rows)
+}
+
 const previewImages = (images, index) => {
   previewImagesList.value = images?.length ? images : ['/placeholder.svg']
   previewIndex.value = index
@@ -416,6 +496,12 @@ onMounted(() => {
   margin: 0;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .btn-add {
   display: flex;
   align-items: center;
@@ -440,6 +526,27 @@ onMounted(() => {
 .btn-add:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(26, 26, 26, 0.2);
+}
+
+.btn-export {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1.5px solid #e5e7eb;
+  background: #fff;
+  color: #666;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-export:hover:not(:disabled) {
+  border-color: #333;
+  color: #333;
+}
+
+.btn-export:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .filter-bar {
@@ -498,6 +605,21 @@ onMounted(() => {
   border-color: #333;
 }
 
+.filter-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  color: #666;
+  font-size: 13px;
+  user-select: none;
+  cursor: pointer;
+}
+
+.filter-check input {
+  accent-color: #c45c3e;
+}
+
 .btn-search {
   display: flex;
   align-items: center;
@@ -521,6 +643,41 @@ onMounted(() => {
 .btn-search:hover {
   border-color: #333;
   color: #333;
+}
+
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: #fafaf8;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  color: #666;
+  font-size: 13px;
+}
+
+.btn-batch {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #67c23a;
+  background: #f0faf4;
+  color: #67c23a;
+  cursor: pointer;
+}
+
+.btn-batch.warn {
+  border-color: #e6a23c;
+  background: #fef9f0;
+  color: #e6a23c;
+}
+
+.btn-link {
+  border: none;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
 }
 
 .table-wrap {

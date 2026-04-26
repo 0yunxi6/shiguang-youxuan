@@ -29,8 +29,8 @@ public class OrderController {
     }
 
     @GetMapping
-    public Result<?> getOrderList() {
-        return orderService.getOrderList();
+    public Result<?> getOrderList(@RequestParam(required = false) Integer status) {
+        return orderService.getOrderList(status);
     }
 
     @GetMapping("/{id}")
@@ -41,6 +41,11 @@ public class OrderController {
     @PutMapping("/{id}/cancel")
     public Result<?> cancelOrder(@PathVariable Long id) {
         return orderService.cancelOrder(id);
+    }
+
+    @PutMapping("/{id}/pay")
+    public Result<?> payOrder(@PathVariable Long id) {
+        return orderService.payOrder(id);
     }
 
     @PutMapping("/{id}/confirm")
