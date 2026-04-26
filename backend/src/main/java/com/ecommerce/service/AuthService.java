@@ -10,6 +10,7 @@ import com.ecommerce.exception.BusinessException;
 import com.ecommerce.mapper.UserMapper;
 import com.ecommerce.security.JwtTokenProvider;
 import com.ecommerce.util.Result;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -35,9 +36,11 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final AuthenticationManager authenticationManager;
     private final CouponService couponService;
+    private final MessageService messageService;
+    private final TokenBlacklistService tokenBlacklistService;
     private final Map<String, LoginFailure> loginFailures = new ConcurrentHashMap<>();
 
-    public Result<?> login(LoginRequest request) {
+    public Result<?> login(LoginRequest request, HttpServletRequest servletRequest) {
         String username = request.getUsername().trim();
         String loginKey = username.toLowerCase();
         checkLoginLocked(loginKey);
@@ -50,15 +53,41 @@ public class AuthService {
             recordLoginFailure(loginKey);
             throw e;
         }
-        String token = jwtTokenProvider.generateToken(username);
         User user = userMapper.findByUsername(username);
+        if (user != null && user.getTwoFactorEnabled() != null && user.getTwoFactorEnabled() == 1) {
+            String twoFactorCode = request.getTwoFactorCode() == null ? "" : request.getTwoFactorCode().trim();
+            if (!"123456".equals(twoFactorCode)) {
+                throw new BusinessException(428, "请输入正确的两步验证码（演示码：123456）");
+            }
+        }
+        String token = jwtTokenProvider.generateToken(username);
         Map<String, Object> data = new HashMap<>();
         data.put("token", token);
         if (user != null) {
+            String ip = resolveIp(servletRequest);
+            user.setLastLoginTime(LocalDateTime.now());
+            user.setLastLoginIp(ip);
+            if (user.getPoints() == null) {
+                user.setPoints(0);
+            }
+            if (user.getLevel() == null) {
+                user.setLevel("普通会员");
+            }
+            userMapper.updateById(user);
+            messageService.create(user.getId(), "login", "登录提醒", "你的账号刚刚从 " + ip + " 登录。若非本人操作，请及时修改密码。");
             user.setPassword(null);
             data.put("user", user);
         }
         return Result.success(data);
+    }
+
+    public Result<?> logout(String authorization) {
+        String token = extractToken(authorization);
+        if (token != null && jwtTokenProvider.validateToken(token)) {
+            tokenBlacklistService.blacklist(token, jwtTokenProvider.getExpirationMillis(token));
+        }
+        SecurityContextHolder.clearContext();
+        return Result.success("退出登录成功");
     }
 
     private void checkLoginLocked(String loginKey) {
@@ -114,9 +143,14 @@ public class AuthService {
         user.setPhone(phone);
         user.setRole("USER");
         user.setStatus(1);
+        user.setLevel("普通会员");
+        user.setPoints(0);
+        user.setEmailVerified(0);
+        user.setTwoFactorEnabled(0);
         user.setCreateTime(LocalDateTime.now());
         userMapper.insert(user);
         couponService.issueWelcomeCouponsIfAbsent(user);
+        messageService.create(user.getId(), "coupon", "新人礼包已发放", "欢迎加入拾光，系统已为你发放新人优惠券。");
         return Result.success("注册成功");
     }
 
@@ -160,5 +194,27 @@ public class AuthService {
             return Result.success(user);
         }
         return Result.error("用户不存在");
+    }
+
+    private String extractToken(String authorization) {
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            return authorization.substring(7);
+        }
+        return null;
+    }
+
+    private String resolveIp(HttpServletRequest request) {
+        if (request == null) {
+            return "unknown";
+        }
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        String realIp = request.getHeader("X-Real-IP");
+        if (realIp != null && !realIp.isBlank()) {
+            return realIp.trim();
+        }
+        return request.getRemoteAddr();
     }
 }

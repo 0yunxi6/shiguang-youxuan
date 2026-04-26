@@ -60,6 +60,8 @@
         <div class="stars">{{ renderStars(item.rating) }}</div>
         <div class="content-cell">
           <p>{{ item.content }}</p>
+          <p v-if="item.appendContent" class="append-line">追评：{{ item.appendContent }}</p>
+          <p v-if="item.adminReply" class="reply-line">回复：{{ item.adminReply }}</p>
           <div class="review-thumbs" v-if="parseReviewImages(item.images).length">
             <img v-for="(img, idx) in parseReviewImages(item.images)" :key="img + idx" :src="img" />
           </div>
@@ -73,6 +75,7 @@
         <div class="actions">
           <button v-if="item.status === 1" @click="changeStatus(item, 0)">隐藏</button>
           <button v-else @click="changeStatus(item, 1)">恢复</button>
+          <button @click="replyReview(item)">回复</button>
           <button class="danger" @click="removeReview(item)">删除</button>
         </div>
       </div>
@@ -93,6 +96,7 @@ import {
   adminDeleteReview,
   adminGetReviews,
   adminGetReviewStats,
+  adminReplyReview,
   adminUpdateReviewStatus
 } from '../../api'
 
@@ -191,6 +195,19 @@ const removeReview = async (item) => {
   })
   await adminDeleteReview(item.id)
   ElMessage.success('评价已删除')
+  loadData()
+}
+
+const replyReview = async (item) => {
+  const { value } = await ElMessageBox.prompt('请输入商家回复内容', '回复评价', {
+    confirmButtonText: '保存回复',
+    cancelButtonText: '取消',
+    inputType: 'textarea',
+    inputValue: item.adminReply || '',
+    inputValidator: (val) => String(val || '').trim().length >= 2 || '回复至少2个字'
+  })
+  await adminReplyReview(item.id, { reply: value })
+  ElMessage.success('回复已保存')
   loadData()
 }
 
@@ -305,6 +322,16 @@ onMounted(loadData)
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.content-cell .append-line {
+  margin-top: 6px;
+  color: #c45c3e;
+}
+
+.content-cell .reply-line {
+  margin-top: 6px;
+  color: #5a6e5a;
 }
 .review-thumbs {
   display: flex;

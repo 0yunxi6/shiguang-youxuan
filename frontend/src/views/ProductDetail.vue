@@ -75,6 +75,7 @@
               <span class="symbol">¥</span>
               <span class="amount">{{ priceInt }}</span>
               <span class="decimal">.{{ priceDec }}</span>
+              <span v-if="product.promotionActive" class="origin-price">¥{{ Number(product.price || 0).toFixed(2) }}</span>
             </div>
           </div>
           <div class="price-meta">
@@ -89,10 +90,29 @@
           </div>
         </div>
 
-        <div class="promo-block" v-if="promo">
+        <div class="promo-block" v-if="product.promotionActive || promo">
           <div class="promo-item">
-            <span class="promo-tag">限时优惠</span>
-            <span class="promo-text">满99减10，领取优惠券</span>
+            <span class="promo-tag">{{ product.promotionTag || '限时优惠' }}</span>
+            <span class="promo-text">
+              <template v-if="product.promotionActive">当前活动价 ¥{{ Number(product.effectivePrice || product.promotionPrice || product.price).toFixed(2) }}</template>
+              <template v-else>满99减10，领取优惠券</template>
+            </span>
+          </div>
+        </div>
+
+        <div class="spec-section" v-if="specGroups.length">
+          <div v-for="group in specGroups" :key="group.name" class="spec-row">
+            <span class="meta-label">{{ group.name }}</span>
+            <div class="spec-options">
+              <button
+                v-for="value in group.values"
+                :key="group.name + value"
+                :class="{ active: selectedSpecs[group.name] === value }"
+                @click="selectedSpecs[group.name] = value"
+              >
+                {{ value }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -155,6 +175,14 @@
         </div>
       </div>
     </div>
+
+    <section class="video-section" v-if="product?.videoUrl">
+      <div class="section-head">
+        <h3>商品视频</h3>
+        <p>通过视频更直观地了解商品细节</p>
+      </div>
+      <video :src="product.videoUrl" controls preload="metadata"></video>
+    </section>
 
     <section class="review-section" v-if="product">
       <div class="review-head">
@@ -236,6 +264,22 @@
               @click="openPreview(idx, parseReviewImages(item.images))"
             />
           </div>
+          <div class="append-review" v-if="item.appendContent">
+            <strong>用户追评</strong>
+            <p>{{ item.appendContent }}</p>
+            <small>{{ formatReviewTime(item.appendTime) }}</small>
+          </div>
+          <div class="append-review admin-reply" v-if="item.adminReply">
+            <strong>商家回复</strong>
+            <p>{{ item.adminReply }}</p>
+            <small>{{ formatReviewTime(item.adminReplyTime) }}</small>
+          </div>
+          <div class="append-box" v-if="canAppendReview(item)">
+            <textarea v-model.trim="appendForms[item.id]" maxlength="300" placeholder="追加使用体验，至少4个字"></textarea>
+            <button @click="submitAppendReview(item)" :disabled="appendSubmittingId === item.id">
+              {{ appendSubmittingId === item.id ? '提交中...' : '提交追评' }}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -315,6 +359,7 @@ import {
   getProductReviews,
   getProductReviewSummary,
   createProductReview,
+  appendProductReview,
   addFavorite,
   removeFavorite
 } from '../api'
@@ -352,7 +397,10 @@ const reviewPage = ref(1)
 const reviewPageSize = 5
 const reviewLoading = ref(false)
 const reviewSubmitting = ref(false)
+const appendSubmittingId = ref(null)
+const appendForms = reactive({})
 const ratingFilter = ref(null)
+const selectedSpecs = reactive({})
 const reviewForm = reactive({
   rating: 5,
   content: '',
@@ -375,13 +423,21 @@ const currentImage = computed(() => {
 
 const activePreviewImages = computed(() => previewImages.value.length ? previewImages.value : images.value)
 const reviewFormImageList = computed(() => parseReviewImages(reviewForm.images))
+const specGroups = computed(() => parseSpecGroups(product.value?.specs))
+const selectedSpecText = computed(() => specGroups.value
+  .map(group => selectedSpecs[group.name] ? `${group.name}:${selectedSpecs[group.name]}` : '')
+  .filter(Boolean)
+  .join('；'))
 
 const promo = ref({
   text: '满99减10，领取优惠券',
   tag: '限时优惠'
 })
 
-const priceStr = computed(() => Number(product.value?.price || 0).toFixed(2))
+const displayPrice = computed(() => product.value?.promotionActive
+  ? (product.value?.effectivePrice || product.value?.promotionPrice || product.value?.price)
+  : product.value?.price)
+const priceStr = computed(() => Number(displayPrice.value || 0).toFixed(2))
 const priceInt = computed(() => priceStr.value.split('.')[0])
 const priceDec = computed(() => priceStr.value.split('.')[1])
 
@@ -416,6 +472,7 @@ const loadProduct = async () => {
   try {
     const res = await getProductDetail(route.params.id)
     product.value = res.data
+    resetSpecSelection()
     rememberProduct(product.value)
     isFavorited.value = !!res.data?.favorited
     quantity.value = 1
@@ -460,6 +517,51 @@ const loadProduct = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const parseSpecGroups = (value) => {
+  if (!value) return []
+  const text = String(value).trim()
+  try {
+    const parsed = JSON.parse(text)
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map(group => ({
+          name: group.name || group.label || '规格',
+          values: Array.isArray(group.values) ? group.values : []
+        }))
+        .filter(group => group.values.length)
+    }
+    if (parsed && typeof parsed === 'object') {
+      return Object.entries(parsed)
+        .map(([name, values]) => ({ name, values: Array.isArray(values) ? values : String(values).split(/[,，/]/) }))
+        .filter(group => group.values.length)
+    }
+  } catch (error) {
+    // fallback to text syntax: 颜色:黑,白;尺码:S,M,L
+  }
+  return text
+    .split(/[;\n；]+/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const [name, rawValues] = line.split(/[:：]/)
+      return {
+        name: (rawValues ? name : '规格').trim(),
+        values: String(rawValues || name)
+          .split(/[,，/|、]+/)
+          .map(item => item.trim())
+          .filter(Boolean)
+      }
+    })
+    .filter(group => group.name && group.values.length)
+}
+
+const resetSpecSelection = () => {
+  Object.keys(selectedSpecs).forEach(key => delete selectedSpecs[key])
+  parseSpecGroups(product.value?.specs).forEach(group => {
+    selectedSpecs[group.name] = group.values[0]
+  })
 }
 
 const loadReviewSummary = async () => {
@@ -545,6 +647,28 @@ const submitReview = async () => {
   }
 }
 
+const canAppendReview = (item) => {
+  const currentUserId = userStore.userInfo?.id
+  return currentUserId && item.userId === currentUserId && !item.appendContent
+}
+
+const submitAppendReview = async (item) => {
+  const content = String(appendForms[item.id] || '').trim()
+  if (content.length < 4) {
+    ElMessage.warning('追评内容至少4个字')
+    return
+  }
+  appendSubmittingId.value = item.id
+  try {
+    await appendProductReview(item.id, { content })
+    ElMessage.success('追评成功')
+    appendForms[item.id] = ''
+    await loadReviews(true)
+  } finally {
+    appendSubmittingId.value = null
+  }
+}
+
 const formatReviewTime = (time) => {
   if (!time) return ''
   return new Date(time).toLocaleDateString('zh-CN')
@@ -604,11 +728,12 @@ const validateQty = () => {
 const handleAddCart = async () => {
   addingCart.value = true
   try {
-    await addToCart({ productId: product.value.id, quantity: quantity.value })
+    await addToCart({ productId: product.value.id, quantity: quantity.value, productSpec: selectedSpecText.value })
     cartStore.addCartItem({
       productId: product.value.id,
       quantity: quantity.value,
-      price: product.value.price
+      price: displayPrice.value,
+      productSpec: selectedSpecText.value
     })
     ElMessage.success(`已加入购物车（${quantity.value}件）`)
   } catch (error) {
@@ -622,7 +747,7 @@ const handleAddCart = async () => {
 const handleAddCartRelated = async (p) => {
   try {
     await addToCart({ productId: p.id, quantity: 1 })
-    cartStore.addCartItem({ productId: p.id, quantity: 1, price: p.price })
+    cartStore.addCartItem({ productId: p.id, quantity: 1, price: p.effectivePrice || p.promotionPrice || p.price })
     ElMessage.success('已加入购物车')
   } catch (error) {
     ElMessage.error('请先登录')
@@ -923,6 +1048,82 @@ onUnmounted(() => {
 .promo-text {
   font-size: 13px;
   color: #f56c6c;
+}
+
+.origin-price {
+  margin-left: 10px;
+  font-size: 14px;
+  color: #aaa;
+  text-decoration: line-through;
+  font-weight: 500;
+}
+
+.spec-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 18px;
+}
+
+.spec-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.spec-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.spec-options button {
+  border: 1px solid #e5e5e5;
+  background: #fff;
+  color: #555;
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+.spec-options button.active,
+.spec-options button:hover {
+  border-color: #c45c3e;
+  color: #c45c3e;
+  background: #fff7f3;
+}
+
+.video-section {
+  margin-top: 36px;
+  padding: 28px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 12px;
+}
+
+.section-head {
+  margin-bottom: 16px;
+}
+
+.section-head h3 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  color: #111;
+}
+
+.section-head p {
+  margin: 0;
+  color: #888;
+  font-size: 13px;
+}
+
+.video-section video {
+  width: 100%;
+  max-height: 520px;
+  border-radius: 10px;
+  background: #111;
 }
 
 /* ===== Meta Row ===== */
@@ -1327,6 +1528,59 @@ onUnmounted(() => {
   font-size: 14px;
   line-height: 1.7;
   margin: 8px 0 0;
+}
+
+.append-review {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #fafaf8;
+  border: 1px solid #f0f0f0;
+}
+
+.append-review strong {
+  display: block;
+  color: #c45c3e;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.append-review p {
+  margin: 0 0 4px;
+  color: #555;
+  line-height: 1.6;
+}
+
+.append-review small {
+  color: #aaa;
+}
+
+.append-review.admin-reply strong {
+  color: #5a6e5a;
+}
+
+.append-box {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.append-box textarea {
+  flex: 1;
+  min-height: 42px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  padding: 9px 10px;
+  resize: vertical;
+}
+
+.append-box button {
+  border: none;
+  background: #111;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0 14px;
+  cursor: pointer;
 }
 
 .review-more {

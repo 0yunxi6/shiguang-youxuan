@@ -26,8 +26,9 @@ public class ProductController {
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
             @RequestParam(required = false) Boolean inStockOnly,
-            @RequestParam(required = false) String brand) {
-        return Result.success(productService.getProductList(page, size, categoryId, keyword, sort, minPrice, maxPrice, inStockOnly, brand));
+            @RequestParam(required = false) String brand,
+            @RequestParam(required = false) Integer minRating) {
+        return Result.success(productService.getProductList(page, size, categoryId, keyword, sort, minPrice, maxPrice, inStockOnly, brand, minRating));
     }
 
     @GetMapping("/search")
@@ -40,8 +41,9 @@ public class ProductController {
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
             @RequestParam(required = false) Boolean inStockOnly,
-            @RequestParam(required = false) String brand) {
-        return getProductList(page, size, categoryId, keyword, sort, minPrice, maxPrice, inStockOnly, brand);
+            @RequestParam(required = false) String brand,
+            @RequestParam(required = false) Integer minRating) {
+        return getProductList(page, size, categoryId, keyword, sort, minPrice, maxPrice, inStockOnly, brand, minRating);
     }
 
     @GetMapping("/search/hot")
@@ -53,6 +55,16 @@ public class ProductController {
     public Result<?> getSearchSuggestions(@RequestParam(required = false) String keyword,
                                           @RequestParam(defaultValue = "8") int limit) {
         return Result.success(productService.getSearchSuggestions(keyword, limit));
+    }
+
+    @GetMapping("/recommendations/personal")
+    public Result<List<Product>> getPersonalRecommendations(@RequestParam(defaultValue = "8") int limit) {
+        return Result.success(productService.getPersonalRecommendations(limit));
+    }
+
+    @GetMapping("/views/history")
+    public Result<?> getViewHistory(@RequestParam(defaultValue = "12") int limit) {
+        return Result.success(productService.getMyViewHistory(limit));
     }
 
     @GetMapping("/{id}/recommendations")

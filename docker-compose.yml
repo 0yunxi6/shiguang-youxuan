@@ -73,6 +73,9 @@ services:
       SPRING_REDIS_PASSWORD: ${SPRING_REDIS_PASSWORD:-}
       JWT_SECRET: ${JWT_SECRET}
       APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost}
+      GLM_API_KEY: ${GLM_API_KEY:-}
+      GLM_API_ENDPOINT: ${GLM_API_ENDPOINT:-https://api.z.ai/api/paas/v4/chat/completions}
+      GLM_MODEL: ${GLM_MODEL:-glm-5.1}
     volumes:
       - uploads_data:/app/uploads
     depends_on:

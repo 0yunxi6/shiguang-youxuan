@@ -12,6 +12,7 @@
       </div>
       <span v-if="product.stock <= 5 && product.stock > 0" class="tag tag-stock">仅剩{{ product.stock }}件</span>
       <span v-if="product.stock === 0" class="tag tag-out">已售罄</span>
+      <span v-if="product.promotionActive" class="tag tag-promo">{{ product.promotionTag || '限时特惠' }}</span>
       <span v-if="product.sales && product.sales > 100" class="tag tag-hot">热销</span>
     </div>
     <div class="card-body">
@@ -22,6 +23,7 @@
           <span class="price-sym">¥</span>
           <span class="price-int">{{ priceInt }}</span>
           <span class="price-dec">.{{ priceDec }}</span>
+          <span v-if="product.promotionActive" class="origin-price">¥{{ Number(product.price || 0).toFixed(2) }}</span>
         </div>
         <span class="sales-count" v-if="product.sales">已售{{ product.sales }}</span>
       </div>
@@ -36,7 +38,8 @@ import { ShoppingCart, Star } from '@element-plus/icons-vue'
 const props = defineProps({ product: { type: Object, required: true } })
 const emit = defineEmits(['click', 'add-cart', 'toggle-favorite'])
 const isFavorited = ref(false)
-const priceStr = computed(() => Number(props.product.price || 0).toFixed(2))
+const displayPrice = computed(() => props.product.promotionActive ? (props.product.effectivePrice || props.product.promotionPrice || props.product.price) : props.product.price)
+const priceStr = computed(() => Number(displayPrice.value || 0).toFixed(2))
 const priceInt = computed(() => priceStr.value.split('.')[0])
 const priceDec = computed(() => priceStr.value.split('.')[1])
 const isSoldOut = computed(() => Number(props.product.stock || 0) <= 0)
@@ -124,6 +127,7 @@ const handleImageError = (event) => {
 .tag-stock { left: 8px; background: #f5a623; color: #fff; }
 .tag-out { left: 8px; background: #999; color: #fff; }
 .tag-hot { right: 8px; background: var(--color-primary, #c45c3e); color: #fff; }
+.tag-promo { left: 8px; bottom: 8px; top: auto; background: #f56c6c; color: #fff; }
 .card-body {
   padding: 12px 14px;
   flex: 1;
@@ -165,6 +169,13 @@ const handleImageError = (event) => {
 .price-sym { font-size: 12px; font-weight: 600; }
 .price-int { font-size: 20px; font-weight: 700; line-height: 1; }
 .price-dec { font-size: 12px; font-weight: 600; }
+.origin-price {
+  margin-left: 6px;
+  font-size: 11px;
+  color: #bbb;
+  text-decoration: line-through;
+  font-weight: 500;
+}
 .sales-count {
   font-size: 11px;
   color: #bbb;

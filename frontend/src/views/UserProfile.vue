@@ -26,6 +26,14 @@
               <span class="summary-label">邮箱</span>
               <strong>{{ userInfo?.email || '未设置' }}</strong>
             </div>
+            <div class="summary-item">
+              <span class="summary-label">会员</span>
+              <strong>{{ userInfo?.level || '普通会员' }}</strong>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">积分</span>
+              <strong>{{ userInfo?.points || 0 }}</strong>
+            </div>
           </div>
         </div>
 
@@ -35,7 +43,7 @@
             :key="tab.key"
             type="button"
             :class="['nav-item', { active: activeTab === tab.key }]"
-            @click="activeTab = tab.key"
+            @click="switchTab(tab.key)"
           >
             <span class="nav-icon">{{ tab.icon }}</span>
             <span class="nav-copy">
@@ -175,6 +183,12 @@
             </div>
             <span class="panel-count">{{ coupons.length }} 张</span>
           </div>
+          <div class="points-exchange">
+            <span>积分兑换：</span>
+            <button type="button" @click="exchangePoints(100)">100积分兑5元券</button>
+            <button type="button" @click="exchangePoints(300)">300积分兑20元券</button>
+            <button type="button" @click="exchangePoints(800)">800积分兑60元券</button>
+          </div>
           <div v-if="coupons.length === 0" class="empty-state">暂无可用优惠券</div>
           <div v-else class="coupon-stack">
             <div v-for="coupon in coupons" :key="coupon.id" class="coupon-card" :class="couponStatusClass(coupon)">
@@ -187,6 +201,136 @@
               <div class="coupon-badge">{{ couponStatusText(coupon) }}</div>
             </div>
           </div>
+        </div>
+
+        <div v-if="activeTab === 'messages'" class="panel glass-card">
+          <div class="panel-heading">
+            <div>
+              <h3 class="panel-title">消息中心</h3>
+              <p class="panel-subtitle">订单、优惠券和安全提醒会集中显示在这里。</p>
+            </div>
+            <button class="btn-mini" type="button" @click="readAllMessages">全部已读</button>
+          </div>
+          <div v-if="messages.length === 0" class="empty-state">暂无消息</div>
+          <div v-else class="message-list">
+            <div v-for="msg in messages" :key="msg.id" class="message-card" :class="{ unread: msg.readStatus === 0 }">
+              <div>
+                <strong>{{ msg.title }}</strong>
+                <p>{{ msg.content }}</p>
+                <small>{{ formatDate(msg.createTime) }} · {{ msg.type }}</small>
+              </div>
+              <button v-if="msg.readStatus === 0" type="button" @click="readMessage(msg.id)">标为已读</button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="activeTab === 'security'" class="panel glass-card">
+          <div class="panel-heading">
+            <div>
+              <h3 class="panel-title">账号安全</h3>
+              <p class="panel-subtitle">邮箱验证、登录提醒和两步验证基础开关。</p>
+            </div>
+          </div>
+          <div class="security-grid">
+            <div class="security-card">
+              <span>邮箱验证</span>
+              <strong>{{ userInfo?.emailVerified === 1 ? '已验证' : '未验证' }}</strong>
+              <button class="btn-mini" type="button" @click="sendEmailCode">获取验证码</button>
+              <div class="inline-form">
+                <input v-model="emailCode" placeholder="输入验证码" />
+                <button type="button" @click="verifyEmail">验证</button>
+              </div>
+            </div>
+            <div class="security-card">
+              <span>两步验证</span>
+              <strong>{{ userInfo?.twoFactorEnabled === 1 ? '已开启' : '未开启' }}</strong>
+              <button class="btn-mini" type="button" @click="switchTwoFactor(userInfo?.twoFactorEnabled !== 1)">
+                {{ userInfo?.twoFactorEnabled === 1 ? '关闭' : '开启' }}
+              </button>
+            </div>
+            <div class="security-card">
+              <span>最近登录</span>
+              <strong>{{ formatDate(userInfo?.lastLoginTime) || '—' }}</strong>
+              <small>{{ userInfo?.lastLoginIp || '暂无记录' }}</small>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="activeTab === 'history'" class="panel glass-card">
+          <div class="panel-heading">
+            <div>
+              <h3 class="panel-title">浏览历史</h3>
+              <p class="panel-subtitle">登录后浏览商品会自动记录，便于回看。</p>
+            </div>
+            <span class="panel-count">{{ viewHistory.length }} 条</span>
+          </div>
+          <div v-if="viewHistory.length === 0" class="empty-state">暂无浏览历史</div>
+          <div v-else class="favorite-grid">
+            <div v-for="item in viewHistory" :key="item.id" class="favorite-card" @click="router.push(`/product/${item.productId}`)">
+              <img :src="item.productImage || '/placeholder.svg'" class="favorite-thumb" />
+              <div class="favorite-copy">
+                <strong>{{ item.productName }}</strong>
+                <span>浏览于 {{ formatDate(item.viewTime) }}</span>
+                <div class="favorite-meta"><span>¥{{ Number(item.price || 0).toFixed(2) }}</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="activeTab === 'afterSales'" class="panel glass-card">
+          <div class="panel-heading">
+            <div>
+              <h3 class="panel-title">售后进度</h3>
+              <p class="panel-subtitle">查看退款、退货、换货申请处理进度。</p>
+            </div>
+            <span class="panel-count">{{ afterSales.length }} 条</span>
+          </div>
+          <div v-if="afterSales.length === 0" class="empty-state">暂无售后申请</div>
+          <div v-else class="message-list">
+            <div v-for="item in afterSales" :key="item.id" class="message-card">
+              <div>
+                <strong>{{ typeText(item.type) }} · {{ afterSaleStatusText[item.status] }}</strong>
+                <p>订单 {{ item.orderNo }}：{{ item.reason }}</p>
+                <small>{{ item.auditRemark || '等待平台处理' }}</small>
+              </div>
+              <span class="mini-price">¥{{ Number(item.amount || 0).toFixed(2) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="activeTab === 'invoices'" class="panel glass-card">
+          <div class="panel-heading">
+            <div>
+              <h3 class="panel-title">发票信息</h3>
+              <p class="panel-subtitle">保存常用发票抬头，下单时可直接使用。</p>
+            </div>
+            <button class="btn-mini" type="button" @click="startNewInvoice">新增发票</button>
+          </div>
+          <div v-if="invoices.length === 0 && !editingInvoice" class="empty-state">暂无发票信息</div>
+          <div v-else class="message-list">
+            <div v-for="item in invoices" :key="item.id" class="message-card">
+              <div>
+                <strong>{{ item.title }} <em v-if="item.isDefault === 1">默认</em></strong>
+                <p>{{ item.taxNo || '无税号' }}</p>
+              </div>
+              <div class="address-actions">
+                <button type="button" @click="editInvoice(item)">编辑</button>
+                <button type="button" v-if="item.isDefault !== 1" @click="makeDefaultInvoice(item.id)">设为默认</button>
+                <button type="button" class="danger" @click="removeInvoice(item.id)">删除</button>
+              </div>
+            </div>
+          </div>
+          <form v-if="editingInvoice" class="address-form" @submit.prevent="saveInvoice">
+            <div class="form-grid">
+              <div class="form-group"><label>发票抬头</label><input v-model="invoiceForm.title" required /></div>
+              <div class="form-group"><label>税号</label><input v-model="invoiceForm.taxNo" /></div>
+            </div>
+            <label class="default-check"><input v-model="invoiceForm.isDefault" type="checkbox" /> 设为默认</label>
+            <div class="form-actions">
+              <button type="button" class="btn-cancel" @click="cancelInvoiceEdit">取消</button>
+              <button type="submit" class="btn-save">保存发票</button>
+            </div>
+          </form>
         </div>
 
         <div v-if="activeTab === 'address'" class="panel glass-card">
@@ -265,8 +409,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   getUserProfile,
   updateProfile,
@@ -275,11 +419,25 @@ import {
   uploadFile,
   getFavorites,
   getCoupons,
+  exchangeCouponByPoints,
   getAddresses,
   createAddress as createAddressApi,
   updateAddress as updateAddressApi,
   deleteAddress as deleteAddressApi,
-  setDefaultAddress
+  setDefaultAddress,
+  requestEmailVerificationCode,
+  verifyEmailCode,
+  toggleTwoFactor,
+  getMessages,
+  markMessageRead,
+  markAllMessagesRead,
+  getAfterSales,
+  getProductViewHistory,
+  getInvoices,
+  createInvoice,
+  updateInvoice,
+  deleteInvoice,
+  setDefaultInvoice
 } from '../api'
 import { useUserStore } from '../store/user'
 import { storage } from '../utils/storage'
@@ -288,6 +446,7 @@ import { Camera } from '@element-plus/icons-vue'
 import UserAvatar from '../components/UserAvatar.vue'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const activeTab = ref('info')
 const userInfo = ref(null)
@@ -297,8 +456,13 @@ const orders = ref([])
 const favorites = ref([])
 const coupons = ref([])
 const addresses = ref([])
+const messages = ref([])
+const afterSales = ref([])
+const viewHistory = ref([])
+const invoices = ref([])
 const pwdError = ref('')
 const addressSaving = ref(false)
+const emailCode = ref('')
 
 const avatarInput = ref(null)
 const triggerAvatarUpload = () => avatarInput.value?.click()
@@ -325,12 +489,28 @@ const tabs = [
   { key: 'orders', label: '我的订单', icon: '◎', desc: '查看订单记录' },
   { key: 'favorites', label: '我的收藏', icon: '★', desc: '查看收藏商品' },
   { key: 'coupons', label: '我的优惠券', icon: '◈', desc: '查看可用优惠券' },
+  { key: 'messages', label: '消息中心', icon: '✉', desc: '订单和安全通知' },
+  { key: 'security', label: '账号安全', icon: '◇', desc: '邮箱验证与安全开关' },
+  { key: 'history', label: '浏览历史', icon: '◒', desc: '最近看过的商品' },
+  { key: 'afterSales', label: '售后进度', icon: '↺', desc: '退款退货处理进度' },
+  { key: 'invoices', label: '发票信息', icon: '▣', desc: '管理常用发票抬头' },
   { key: 'address', label: '收货地址', icon: '◍', desc: '管理收货地址' }
 ]
+
+const switchTab = (key) => {
+  activeTab.value = key
+  router.replace({ path: '/profile', query: key === 'info' ? {} : { tab: key } })
+}
+
+watch(() => route.query.tab, (tab) => {
+  const key = typeof tab === 'string' ? tab : 'info'
+  activeTab.value = tabs.some(item => item.key === key) ? key : 'info'
+}, { immediate: true })
 
 const profileForm = reactive({ nickname: '', email: '', phone: '' })
 const passwordForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
 const editingAddress = ref(null)
+const editingInvoice = ref(null)
 const addressForm = reactive({
   id: null,
   name: '',
@@ -341,6 +521,9 @@ const addressForm = reactive({
   detail: '',
   isDefault: false
 })
+const invoiceForm = reactive({ id: null, title: '', taxNo: '', isDefault: false })
+const afterSaleStatusText = ['待审核', '已同意', '已拒绝', '已完成']
+const typeText = (type) => ({ refund: '退款', return: '退货退款', exchange: '换货' }[type] || type || '-')
 
 const formatDate = (time) => time ? new Date(time).toLocaleDateString('zh-CN') : ''
 
@@ -403,6 +586,73 @@ const loadCoupons = async () => {
     coupons.value = res.data || []
   } catch (error) {
     coupons.value = []
+  }
+}
+
+const loadMessages = async () => {
+  try {
+    const res = await getMessages()
+    messages.value = res.data || []
+  } catch (error) {
+    messages.value = []
+  }
+}
+
+const readMessage = async (id) => {
+  await markMessageRead(id)
+  await loadMessages()
+}
+
+const readAllMessages = async () => {
+  await markAllMessagesRead()
+  await loadMessages()
+  ElMessage.success('消息已全部标记为已读')
+}
+
+const sendEmailCode = async () => {
+  const res = await requestEmailVerificationCode()
+  emailCode.value = res.data?.code || ''
+  ElMessage.success('验证码已生成，请查看消息中心')
+  await loadMessages()
+}
+
+const verifyEmail = async () => {
+  await verifyEmailCode({ code: emailCode.value })
+  ElMessage.success('邮箱验证成功')
+  emailCode.value = ''
+  await loadProfile()
+}
+
+const switchTwoFactor = async (enabled) => {
+  await toggleTwoFactor(enabled)
+  ElMessage.success(enabled ? '两步验证已开启' : '两步验证已关闭')
+  await loadProfile()
+}
+
+const loadAfterSales = async () => {
+  try {
+    const res = await getAfterSales()
+    afterSales.value = res.data || []
+  } catch (error) {
+    afterSales.value = []
+  }
+}
+
+const loadViewHistory = async () => {
+  try {
+    const res = await getProductViewHistory({ limit: 24 })
+    viewHistory.value = res.data || []
+  } catch (error) {
+    viewHistory.value = []
+  }
+}
+
+const loadInvoices = async () => {
+  try {
+    const res = await getInvoices()
+    invoices.value = res.data || []
+  } catch (error) {
+    invoices.value = []
   }
 }
 
@@ -506,6 +756,47 @@ const makeDefaultAddress = async (id) => {
   }
 }
 
+const exchangePoints = async (points) => {
+  try {
+    await exchangeCouponByPoints(points)
+    ElMessage.success('兑换成功，优惠券已到账')
+    await Promise.all([loadProfile(), loadCoupons(), loadMessages()])
+  } catch (error) {
+    // request interceptor already shows backend message
+  }
+}
+
+const resetInvoiceForm = () => Object.assign(invoiceForm, { id: null, title: '', taxNo: '', isDefault: invoices.value.length === 0 })
+const startNewInvoice = () => { editingInvoice.value = { id: null }; resetInvoiceForm() }
+const editInvoice = (invoice) => {
+  editingInvoice.value = invoice
+  Object.assign(invoiceForm, { ...invoice, isDefault: invoice.isDefault === 1 })
+}
+const cancelInvoiceEdit = () => { editingInvoice.value = null; resetInvoiceForm() }
+const saveInvoice = async () => {
+  const payload = { title: invoiceForm.title, taxNo: invoiceForm.taxNo, isDefault: invoiceForm.isDefault ? 1 : 0 }
+  if (invoiceForm.id) {
+    await updateInvoice(invoiceForm.id, payload)
+    ElMessage.success('发票已更新')
+  } else {
+    await createInvoice(payload)
+    ElMessage.success('发票已新增')
+  }
+  editingInvoice.value = null
+  await loadInvoices()
+  resetInvoiceForm()
+}
+const makeDefaultInvoice = async (id) => {
+  await setDefaultInvoice(id)
+  ElMessage.success('默认发票已更新')
+  await loadInvoices()
+}
+const removeInvoice = async (id) => {
+  await deleteInvoice(id)
+  ElMessage.success('发票已删除')
+  await loadInvoices()
+}
+
 const couponStatusText = (coupon) => {
   if (coupon?.status === 1) return '已使用'
   if (coupon?.status === 2) return '已过期'
@@ -518,7 +809,7 @@ const couponStatusClass = (coupon) => {
   return coupon?.canUse === false ? 'disabled' : 'active'
 }
 
-onMounted(() => { loadProfile(); loadOrders(); loadFavorites(); loadCoupons(); loadAddresses() })
+onMounted(() => { loadProfile(); loadOrders(); loadFavorites(); loadCoupons(); loadAddresses(); loadMessages(); loadAfterSales(); loadViewHistory(); loadInvoices() })
 </script>
 
 <style scoped>
@@ -953,6 +1244,37 @@ onMounted(() => { loadProfile(); loadOrders(); loadFavorites(); loadCoupons(); l
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.points-exchange {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 12px;
+  background: #fafaf8;
+}
+
+.points-exchange span {
+  color: #666;
+  font-size: 13px;
+}
+
+.points-exchange button {
+  border: 1px solid #ddd;
+  background: #fff;
+  border-radius: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  color: #333;
+}
+
+.points-exchange button:hover {
+  border-color: #c45c3e;
+  color: #c45c3e;
 }
 
 .coupon-card {

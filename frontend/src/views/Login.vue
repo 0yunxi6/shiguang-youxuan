@@ -105,6 +105,24 @@
             </div>
           </template>
 
+          <template v-if="mode === 'login'">
+            <div class="form-group">
+              <label>两步验证码（已开启账号填写）</label>
+              <div class="input-wrap" :class="{ active: activeField === 'twoFactorCode' }">
+                <el-icon class="input-icon"><Key /></el-icon>
+                <input
+                  v-model.trim="form.twoFactorCode"
+                  type="text"
+                  placeholder="演示验证码：123456"
+                  maxlength="6"
+                  inputmode="numeric"
+                  @focus="activeField = 'twoFactorCode'"
+                  @blur="handleFieldBlur"
+                />
+              </div>
+            </div>
+          </template>
+
           <template v-if="mode === 'register'">
             <div class="register-panel">
               <div class="register-panel-title">完善注册信息</div>
@@ -233,7 +251,7 @@ import { ref, reactive, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { login, register, forgotPasswordVerify, forgotPasswordReset } from '../api'
 import { useUserStore } from '../store/user'
-import { User, Lock, View, Hide, Message, Phone } from '@element-plus/icons-vue'
+import { User, Lock, View, Hide, Message, Phone, Key } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -254,6 +272,7 @@ const form = reactive({
   confirmPassword: '',
   email: '',
   phone: '',
+  twoFactorCode: '',
   resetPassword: '',
   resetConfirmPassword: ''
 })
@@ -389,7 +408,7 @@ const handleSubmit = async () => {
         mode.value = 'login'
       }
     } else {
-      const res = await login({ username: form.username, password: form.password })
+      const res = await login({ username: form.username, password: form.password, twoFactorCode: form.twoFactorCode })
       userStore.setToken(res.data.token)
       if (res.data.user) userStore.setUserInfo(res.data.user)
       loginResult.value = 'success'

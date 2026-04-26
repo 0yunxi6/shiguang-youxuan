@@ -2,9 +2,9 @@
   <div class="admin-layout">
     <aside class="admin-aside" :class="{ collapsed: isCollapse }">
       <div class="logo-section" @click="$router.push('/admin/dashboard')">
-        <div class="logo-icon"><img src="/logo.png" alt="拾光优选 Logo" /></div>
+        <div class="logo-icon"><img src="/logo.png" alt="拾光 Logo" /></div>
         <transition name="fade">
-          <span v-if="!isCollapse" class="logo-text">拾光优选</span>
+          <span v-if="!isCollapse" class="logo-text">拾光</span>
         </transition>
       </div>
 
@@ -63,6 +63,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../../store/user'
+import { logoutApi } from '../../api'
 import { DataAnalysis, Goods, List, Document, User, HomeFilled, Expand, Fold, Right, ArrowUp, ArrowDown, SwitchButton, Star, Tickets } from '@element-plus/icons-vue'
 import UserAvatar from '../../components/UserAvatar.vue'
 
@@ -80,6 +81,7 @@ const navItems = [
   { path: '/admin/reviews', label: '评价管理', icon: Document },
   { path: '/admin/favorites', label: '收藏管理', icon: Star },
   { path: '/admin/coupons', label: '优惠券管理', icon: Tickets },
+  { path: '/admin/after-sales', label: '售后管理', icon: Document },
   { path: '/admin/users', label: '用户管理', icon: User }
 ]
 const titleMap = {
@@ -90,11 +92,12 @@ const titleMap = {
   '/admin/reviews': '评价管理',
   '/admin/favorites': '收藏管理',
   '/admin/coupons': '优惠券管理',
+  '/admin/after-sales': '售后管理',
   '/admin/users': '用户管理'
 }
 const activeMenu = computed(() => route.path)
 const currentTitle = computed(() => titleMap[route.path] || '管理后台')
-const handleLogout = () => { userStore.logout(); router.push('/login') }
+const handleLogout = async () => { try { await logoutApi() } catch (error) {}; userStore.logout(); router.push('/login') }
 
 const closeDropdownOnClickOutside = (e) => {
   if (showDropdown.value && !e.target.closest('.header-right')) {

@@ -133,6 +133,9 @@ public class AdminProductController {
         product.setName(StringUtils.hasText(product.getName()) ? product.getName().trim() : null);
         product.setBrand(StringUtils.hasText(product.getBrand()) ? product.getBrand().trim() : null);
         product.setDescription(StringUtils.hasText(product.getDescription()) ? product.getDescription().trim() : null);
+        product.setSpecs(StringUtils.hasText(product.getSpecs()) ? product.getSpecs().trim() : null);
+        product.setVideoUrl(StringUtils.hasText(product.getVideoUrl()) ? product.getVideoUrl().trim() : null);
+        product.setPromotionTag(StringUtils.hasText(product.getPromotionTag()) ? product.getPromotionTag().trim() : null);
         if (!StringUtils.hasText(product.getName())) {
             return Result.error("商品名称不能为空");
         }
@@ -141,6 +144,18 @@ public class AdminProductController {
         }
         if (product.getBrand() != null && product.getBrand().length() > 100) {
             return Result.error("品牌名称不能超过100个字符");
+        }
+        if (product.getSpecs() != null && product.getSpecs().length() > 1000) {
+            return Result.error("商品规格不能超过1000个字符");
+        }
+        if (product.getVideoUrl() != null && product.getVideoUrl().length() > 500) {
+            return Result.error("商品视频地址不能超过500个字符");
+        }
+        if (product.getPromotionTag() != null && product.getPromotionTag().length() > 50) {
+            return Result.error("活动标签不能超过50个字符");
+        }
+        if (product.getPromotionPrice() != null && product.getPromotionPrice().compareTo(BigDecimal.ZERO) < 0) {
+            return Result.error("活动价格不能小于0");
         }
         if (product.getCategoryId() == null || product.getCategoryId() <= 0) {
             return Result.error("请选择商品分类");

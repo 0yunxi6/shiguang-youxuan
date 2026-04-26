@@ -19,6 +19,10 @@ public class ProductReview {
     private Integer rating;
     private String content;
     private String images;
+    private String appendContent;
+    private LocalDateTime appendTime;
+    private String adminReply;
+    private LocalDateTime adminReplyTime;
     private Integer status;
     @TableLogic
     private Integer deleted;
@@ -52,6 +56,14 @@ public class ProductReview {
     public void setContent(String content) { this.content = content; }
     public String getImages() { return images; }
     public void setImages(String images) { this.images = images; }
+    public String getAppendContent() { return appendContent; }
+    public void setAppendContent(String appendContent) { this.appendContent = appendContent; }
+    public LocalDateTime getAppendTime() { return appendTime; }
+    public void setAppendTime(LocalDateTime appendTime) { this.appendTime = appendTime; }
+    public String getAdminReply() { return adminReply; }
+    public void setAdminReply(String adminReply) { this.adminReply = adminReply; }
+    public LocalDateTime getAdminReplyTime() { return adminReplyTime; }
+    public void setAdminReplyTime(LocalDateTime adminReplyTime) { this.adminReplyTime = adminReplyTime; }
     public Integer getStatus() { return status; }
     public void setStatus(Integer status) { this.status = status; }
     public Integer getDeleted() { return deleted; }

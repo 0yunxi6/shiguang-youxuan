@@ -50,6 +50,9 @@ public class FileUploadController {
         if (!ALLOWED_EXTENSIONS.contains(extension)) {
             return Result.error("不支持的文件格式，仅支持 jpg/png/gif/webp");
         }
+        if (!isAllowedImageHeader(file)) {
+            return Result.error("图片内容校验失败，请上传真实图片文件");
+        }
 
         String filename = UUID.randomUUID().toString().replace("-", "") + extension;
         Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
@@ -66,5 +69,22 @@ public class FileUploadController {
         }
         String url = "/api/uploads/" + filename;
         return Result.success("上传成功", url);
+    }
+
+    private boolean isAllowedImageHeader(MultipartFile file) throws IOException {
+        byte[] header = new byte[16];
+        int length;
+        try (InputStream inputStream = file.getInputStream()) {
+            length = inputStream.read(header);
+        }
+        if (length < 4) {
+            return false;
+        }
+        boolean jpeg = (header[0] & 0xFF) == 0xFF && (header[1] & 0xFF) == 0xD8 && (header[2] & 0xFF) == 0xFF;
+        boolean png = header[0] == (byte) 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47;
+        boolean gif = header[0] == 0x47 && header[1] == 0x49 && header[2] == 0x46;
+        boolean webp = length >= 12 && header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46
+                && header[8] == 0x57 && header[9] == 0x45 && header[10] == 0x42 && header[11] == 0x50;
+        return jpeg || png || gif || webp;
     }
 }

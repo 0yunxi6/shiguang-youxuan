@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,6 +36,11 @@ public class AdminReviewController {
     @PutMapping("/{id}/status")
     public Result<?> updateStatus(@PathVariable Long id, @RequestParam Integer status) {
         return reviewService.updateStatus(id, status);
+    }
+
+    @PutMapping("/{id}/reply")
+    public Result<?> reply(@PathVariable Long id, @RequestBody java.util.Map<String, String> body) {
+        return reviewService.replyReview(id, body == null ? null : body.get("reply"));
     }
 
     @DeleteMapping("/{id}")

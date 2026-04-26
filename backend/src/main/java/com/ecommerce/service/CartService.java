@@ -30,10 +30,15 @@ public class CartService {
     private final ProductMapper productMapper;
     
     public Result<?> addToCart(Long productId, Integer quantity) {
+        return addToCart(productId, quantity, null);
+    }
+
+    public Result<?> addToCart(Long productId, Integer quantity, String productSpec) {
         Integer safeQuantity = normalizeQuantity(quantity);
         if (safeQuantity == null) {
             return Result.error("购买数量不合法");
         }
+        String safeSpec = normalizeSpec(productSpec);
         Product product = productMapper.selectById(productId);
         if (!isSaleable(product)) {
             return Result.error("商品已下架或不存在");
@@ -41,7 +46,9 @@ public class CartService {
         
         User user = getCurrentUser();
         QueryWrapper<Cart> wrapper = new QueryWrapper<>();
-        wrapper.eq("user_id", user.getId()).eq("product_id", productId);
+        wrapper.eq("user_id", user.getId())
+                .eq("product_id", productId)
+                .eq("product_spec", safeSpec);
         Cart existingCart = cartMapper.selectOne(wrapper);
         int newQuantity = (existingCart == null ? 0 : existingCart.getQuantity()) + safeQuantity;
         if (newQuantity > product.getStock()) {
@@ -59,6 +66,7 @@ public class CartService {
             Cart cart = new Cart();
             cart.setUserId(user.getId());
             cart.setProductId(productId);
+            cart.setProductSpec(safeSpec);
             cart.setQuantity(safeQuantity);
             cart.setCreateTime(LocalDateTime.now());
             cartMapper.insert(cart);
@@ -86,12 +94,17 @@ public class CartService {
             Map<String, Object> item = new HashMap<>();
             item.put("id", cart.getId());
             item.put("productId", cart.getProductId());
+            item.put("productSpec", cart.getProductSpec());
             item.put("quantity", cart.getQuantity());
             if (product != null) {
-                BigDecimal subtotal = product.getPrice().multiply(BigDecimal.valueOf(cart.getQuantity()));
+                BigDecimal price = effectivePrice(product);
+                BigDecimal subtotal = price.multiply(BigDecimal.valueOf(cart.getQuantity()));
                 item.put("productName", product.getName());
                 item.put("description", product.getDescription());
-                item.put("price", product.getPrice());
+                item.put("price", price);
+                item.put("originalPrice", product.getPrice());
+                item.put("promotionActive", isPromotionActive(product));
+                item.put("promotionTag", product.getPromotionTag());
                 item.put("imageUrl", product.getImageUrl());
                 item.put("stock", product.getStock());
                 item.put("status", product.getStatus());
@@ -163,11 +176,34 @@ public class CartService {
         return quantity;
     }
 
+    private String normalizeSpec(String productSpec) {
+        if (productSpec == null) {
+            return "";
+        }
+        String normalized = productSpec.trim();
+        return normalized.length() > 200 ? normalized.substring(0, 200) : normalized;
+    }
+
     private boolean isSaleable(Product product) {
         return product != null
                 && product.getStatus() != null
                 && product.getStatus() == 1
                 && product.getStock() != null
                 && product.getStock() > 0;
+    }
+
+    private BigDecimal effectivePrice(Product product) {
+        return isPromotionActive(product) && product.getPromotionPrice() != null
+                ? product.getPromotionPrice()
+                : product.getPrice();
+    }
+
+    private boolean isPromotionActive(Product product) {
+        if (product == null || product.getPromotionPrice() == null) {
+            return false;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        return (product.getPromotionStartTime() == null || !product.getPromotionStartTime().isAfter(now))
+                && (product.getPromotionEndTime() == null || !product.getPromotionEndTime().isBefore(now));
     }
 }

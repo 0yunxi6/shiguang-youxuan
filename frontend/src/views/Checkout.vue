@@ -27,6 +27,7 @@
             <img :src="item.imageUrl || '/placeholder.svg'" class="item-thumb" />
             <div class="item-info">
               <span class="item-name">{{ item.productName }}</span>
+              <span class="item-spec" v-if="item.productSpec">{{ item.productSpec }}</span>
               <span class="item-qty">× {{ item.quantity }}</span>
             </div>
             <div class="item-price">¥{{ (item.price * item.quantity).toFixed(2) }}</div>
@@ -208,7 +209,14 @@
             </label>
           </div>
           <div class="invoice-form" v-if="needInvoice">
+            <select v-if="invoices.length" v-model="selectedInvoiceId" @change="applySelectedInvoice">
+              <option :value="null">手动填写发票</option>
+              <option v-for="invoice in invoices" :key="invoice.id" :value="invoice.id">
+                {{ invoice.title }}{{ invoice.isDefault === 1 ? '（默认）' : '' }}
+              </option>
+            </select>
             <input v-model="invoiceTitle" placeholder="请输入发票抬头" />
+            <input v-model="invoiceTaxNo" placeholder="税号（选填）" />
           </div>
         </div>
 
@@ -287,7 +295,8 @@ import {
   getAddresses,
   createAddress as createAddressApi,
   updateAddress as updateAddressApi,
-  deleteAddress as deleteAddressApi
+  deleteAddress as deleteAddressApi,
+  getInvoices
 } from '../api'
 import { useCartStore } from '../store/cart'
 import { storage } from '../utils/storage'
@@ -350,6 +359,9 @@ const selectedPayment = ref('alipay')
 // Invoice
 const needInvoice = ref(false)
 const invoiceTitle = ref('')
+const invoiceTaxNo = ref('')
+const invoices = ref([])
+const selectedInvoiceId = ref(null)
 
 const totalPrice = computed(() => {
   return cartItems.value.reduce((sum, item) => sum + item.price * item.quantity, 0).toFixed(2)
@@ -360,7 +372,7 @@ const discount = computed(() => {
 })
 
 const shippingFee = computed(() => {
-  return 0
+  return Number(totalPrice.value) >= 99 ? 0 : 8
 })
 
 const finalPrice = computed(() => {
@@ -416,6 +428,7 @@ const loadAddresses = async () => {
 const loadCart = async () => {
   try {
     await loadAddresses()
+    await loadInvoices()
     const res = await getCartList()
     const allItems = res.data || []
     cartItems.value = selectedCartItemIds.value.length
@@ -430,6 +443,32 @@ const loadCart = async () => {
   } catch (error) {
     console.error(error)
   }
+}
+
+const loadInvoices = async () => {
+  try {
+    const res = await getInvoices()
+    invoices.value = res.data || []
+    const defaultInvoice = invoices.value.find(item => item.isDefault === 1 || item.isDefault === true)
+    if (defaultInvoice) {
+      selectedInvoiceId.value = defaultInvoice.id
+      invoiceTitle.value = defaultInvoice.title || ''
+      invoiceTaxNo.value = defaultInvoice.taxNo || ''
+    }
+  } catch (error) {
+    invoices.value = []
+  }
+}
+
+const applySelectedInvoice = () => {
+  const invoice = invoices.value.find(item => item.id === selectedInvoiceId.value)
+  if (!invoice) {
+    invoiceTitle.value = ''
+    invoiceTaxNo.value = ''
+    return
+  }
+  invoiceTitle.value = invoice.title || ''
+  invoiceTaxNo.value = invoice.taxNo || ''
 }
 
 const loadCoupons = async () => {
@@ -547,6 +586,7 @@ const submitOrder = async () => {
 
   if (needInvoice.value && invoiceTitle.value) {
     orderData.invoiceTitle = invoiceTitle.value
+    orderData.invoiceTaxNo = invoiceTaxNo.value
   }
 
   submitting.value = true
@@ -736,6 +776,11 @@ onMounted(() => {
   font-size: 14px;
   font-weight: 600;
   color: #111;
+}
+
+.item-spec {
+  font-size: 12px;
+  color: #999;
 }
 
 .item-qty {
@@ -1221,9 +1266,13 @@ onMounted(() => {
 
 .invoice-form {
   margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.invoice-form input {
+.invoice-form input,
+.invoice-form select {
   width: 100%;
   max-width: 400px;
   padding: 12px 16px;
@@ -1234,7 +1283,8 @@ onMounted(() => {
   transition: border-color 0.2s;
 }
 
-.invoice-form input:focus {
+.invoice-form input:focus,
+.invoice-form select:focus {
   border-color: #c45c3e;
 }
 

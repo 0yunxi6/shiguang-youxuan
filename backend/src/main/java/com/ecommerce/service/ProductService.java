@@ -4,12 +4,14 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ecommerce.entity.Category;
 import com.ecommerce.entity.Product;
+import com.ecommerce.entity.ProductViewHistory;
 import com.ecommerce.entity.SearchLog;
 import com.ecommerce.entity.User;
 import com.ecommerce.mapper.CategoryMapper;
 import com.ecommerce.mapper.OrderItemMapper;
 import com.ecommerce.mapper.ProductFavoriteMapper;
 import com.ecommerce.mapper.ProductMapper;
+import com.ecommerce.mapper.ProductViewHistoryMapper;
 import com.ecommerce.mapper.SearchLogMapper;
 import com.ecommerce.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -37,10 +40,11 @@ public class ProductService {
     private final OrderItemMapper orderItemMapper;
     private final UserMapper userMapper;
     private final SearchLogMapper searchLogMapper;
+    private final ProductViewHistoryMapper productViewHistoryMapper;
 
     public Page<Product> getProductList(int page, int size, Long categoryId, String keyword,
                                          String sort, BigDecimal minPrice, BigDecimal maxPrice,
-                                         Boolean inStockOnly, String brand) {
+                                         Boolean inStockOnly, String brand, Integer minRating) {
         page = Math.max(page, 1);
         size = Math.min(Math.max(size, 1), 60);
         String normalizedKeyword = normalizeSearchKeyword(keyword);
@@ -89,6 +93,9 @@ public class ProductService {
         if (Boolean.TRUE.equals(inStockOnly)) {
             wrapper.gt("stock", 0);
         }
+        if (minRating != null && minRating >= 1 && minRating <= 5) {
+            wrapper.apply("(SELECT COALESCE(AVG(pr.rating), 0) FROM product_review pr WHERE pr.product_id = product.id AND pr.status = 1 AND pr.deleted = 0) >= {0}", minRating);
+        }
 
         // Sorting
         if ("price_asc".equals(sort)) {
@@ -114,7 +121,59 @@ public class ProductService {
             return null;
         }
         enrichProducts(List.of(product));
+        recordProductView(product.getId());
         return product;
+    }
+
+    public List<Product> getPersonalRecommendations(int limit) {
+        int safeLimit = Math.min(Math.max(limit, 1), 20);
+        Long userId = getCurrentUserId();
+        if (userId != null) {
+            QueryWrapper<ProductViewHistory> historyWrapper = new QueryWrapper<>();
+            historyWrapper.eq("user_id", userId).orderByDesc("view_time").last("LIMIT 1");
+            ProductViewHistory latest = productViewHistoryMapper.selectList(historyWrapper).stream().findFirst().orElse(null);
+            if (latest != null) {
+                List<Product> related = getRecommendations(latest.getProductId(), safeLimit);
+                if (!related.isEmpty()) {
+                    return related;
+                }
+            }
+        }
+        QueryWrapper<Product> wrapper = new QueryWrapper<>();
+        wrapper.eq("status", 1)
+                .gt("stock", 0)
+                .orderByDesc("(SELECT COALESCE(SUM(oi.quantity), 0) FROM order_item oi WHERE oi.product_id = product.id)")
+                .orderByDesc("create_time")
+                .last("LIMIT " + safeLimit);
+        List<Product> products = productMapper.selectList(wrapper);
+        enrichProducts(products);
+        return products;
+    }
+
+    public List<ProductViewHistory> getMyViewHistory(int limit) {
+        Long userId = getCurrentUserId();
+        if (userId == null) {
+            return List.of();
+        }
+        int safeLimit = Math.min(Math.max(limit, 1), 50);
+        QueryWrapper<ProductViewHistory> wrapper = new QueryWrapper<>();
+        wrapper.eq("user_id", userId).orderByDesc("view_time").last("LIMIT " + safeLimit);
+        List<ProductViewHistory> rows = productViewHistoryMapper.selectList(wrapper);
+        if (rows.isEmpty()) {
+            return rows;
+        }
+        List<Long> productIds = rows.stream().map(ProductViewHistory::getProductId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, Product> productMap = productMapper.selectBatchIds(productIds).stream()
+                .collect(Collectors.toMap(Product::getId, product -> product));
+        for (ProductViewHistory row : rows) {
+            Product product = productMap.get(row.getProductId());
+            if (product != null) {
+                row.setProductName(product.getName());
+                row.setProductImage(product.getImageUrl());
+                row.setPrice(product.getPrice());
+            }
+        }
+        return rows;
     }
 
     public List<Product> getRecommendations(Long productId, int limit) {
@@ -263,7 +322,21 @@ public class ProductService {
             product.setFavoriteCount(favoriteCountMap.getOrDefault(product.getId(), 0L));
             product.setSales(salesMap.getOrDefault(product.getId(), 0L));
             product.setFavorited(favoritedIds.contains(product.getId()));
+            boolean promotionActive = isPromotionActive(product);
+            product.setPromotionActive(promotionActive);
+            product.setEffectivePrice(promotionActive && product.getPromotionPrice() != null
+                    ? product.getPromotionPrice()
+                    : product.getPrice());
         }
+    }
+
+    private boolean isPromotionActive(Product product) {
+        if (product == null || product.getPromotionPrice() == null) {
+            return false;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        return (product.getPromotionStartTime() == null || !product.getPromotionStartTime().isAfter(now))
+                && (product.getPromotionEndTime() == null || !product.getPromotionEndTime().isBefore(now));
     }
 
     private Map<Long, String> buildCategoryNameMap(List<Product> products) {
@@ -368,6 +441,30 @@ public class ProductService {
             searchLogMapper.upsertKeyword(keyword);
         } catch (RuntimeException ignored) {
             // Search logging is non-critical; product search should not fail because statistics failed.
+        }
+    }
+
+    private void recordProductView(Long productId) {
+        Long userId = getCurrentUserId();
+        if (userId == null || productId == null) {
+            return;
+        }
+        try {
+            QueryWrapper<ProductViewHistory> wrapper = new QueryWrapper<>();
+            wrapper.eq("user_id", userId).eq("product_id", productId);
+            ProductViewHistory existing = productViewHistoryMapper.selectOne(wrapper);
+            if (existing == null) {
+                ProductViewHistory history = new ProductViewHistory();
+                history.setUserId(userId);
+                history.setProductId(productId);
+                history.setViewTime(java.time.LocalDateTime.now());
+                productViewHistoryMapper.insert(history);
+            } else {
+                existing.setViewTime(java.time.LocalDateTime.now());
+                productViewHistoryMapper.updateById(existing);
+            }
+        } catch (RuntimeException ignored) {
+            // Browsing history is best-effort and should never break product detail.
         }
     }
 

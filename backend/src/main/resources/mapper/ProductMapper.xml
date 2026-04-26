@@ -11,6 +11,13 @@
         <result column="stock" property="stock"/>
         <result column="description" property="description"/>
         <result column="image_url" property="imageUrl"/>
+        <result column="images" property="images"/>
+        <result column="specs" property="specs"/>
+        <result column="video_url" property="videoUrl"/>
+        <result column="promotion_tag" property="promotionTag"/>
+        <result column="promotion_price" property="promotionPrice"/>
+        <result column="promotion_start_time" property="promotionStartTime"/>
+        <result column="promotion_end_time" property="promotionEndTime"/>
         <result column="status" property="status"/>
         <result column="deleted" property="deleted"/>
         <result column="create_time" property="createTime"/>

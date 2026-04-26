@@ -24,6 +24,7 @@ public class OrderController {
                 request.getCouponId(),
                 request.getPaymentMethod(),
                 request.getInvoiceTitle(),
+                request.getInvoiceTaxNo(),
                 request.getCartItemIds()
         );
     }

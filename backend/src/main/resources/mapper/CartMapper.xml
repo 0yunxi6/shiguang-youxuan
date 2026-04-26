@@ -6,6 +6,7 @@
         <id column="id" property="id"/>
         <result column="user_id" property="userId"/>
         <result column="product_id" property="productId"/>
+        <result column="product_spec" property="productSpec"/>
         <result column="quantity" property="quantity"/>
         <result column="create_time" property="createTime"/>
         <result column="update_time" property="updateTime"/>

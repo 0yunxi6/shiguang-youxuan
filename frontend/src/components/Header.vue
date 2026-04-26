@@ -4,9 +4,9 @@
       <div class="header-left">
         <div class="logo" @click="$router.push('/')">
           <div class="logo-icon">
-            <img src="/logo.png" alt="拾光优选 Logo" />
+            <img src="/logo.png" alt="拾光 Logo" />
           </div>
-          <span class="logo-text">拾光优选</span>
+          <span class="logo-text">拾光</span>
         </div>
         <nav class="main-nav" :class="{ open: mobileMenuOpen }">
           <router-link to="/" class="nav-link" :class="{ active: $route.path === '/' }"
@@ -137,7 +137,7 @@ import { useUserStore } from '../store/user'
 import { useCartStore } from '../store/cart'
 import { useCategoryStore } from '../store/category'
 import { storage } from '../utils/storage'
-import { getHotSearchKeywords } from '../api'
+import { getHotSearchKeywords, logoutApi } from '../api'
 import { ElMessage } from 'element-plus'
 import {
   Search, ShoppingCart, User, Document, Setting,
@@ -221,9 +221,10 @@ const loadPopularSearches = async () => {
   }
 }
 
-const handleCommand = (cmd) => {
+const handleCommand = async (cmd) => {
   const map = { profile: '/profile', orders: '/order', admin: '/admin' }
   if (cmd === 'logout') {
+    try { await logoutApi() } catch (error) {}
     userStore.logout()
     cartStore.clearCart()
     ElMessage.success('已退出登录')

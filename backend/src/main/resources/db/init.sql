@@ -14,6 +14,13 @@ CREATE TABLE IF NOT EXISTS `user` (
   `avatar` VARCHAR(500),
   `role` VARCHAR(20) DEFAULT 'USER' COMMENT 'USER/ADMIN',
   `status` TINYINT DEFAULT 1 COMMENT '0:禁用 1:正常',
+  `status_reason` VARCHAR(255) DEFAULT NULL,
+  `level` VARCHAR(20) DEFAULT '普通会员',
+  `points` INT DEFAULT 0,
+  `email_verified` TINYINT DEFAULT 0,
+  `two_factor_enabled` TINYINT DEFAULT 0,
+  `last_login_time` DATETIME DEFAULT NULL,
+  `last_login_ip` VARCHAR(64) DEFAULT NULL,
   `deleted` TINYINT DEFAULT 0,
   `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -48,6 +55,12 @@ CREATE TABLE IF NOT EXISTS `product` (
   `description` TEXT,
   `image_url` VARCHAR(500),
   `images` VARCHAR(2000),
+  `specs` VARCHAR(1000),
+  `video_url` VARCHAR(500),
+  `promotion_tag` VARCHAR(50),
+  `promotion_price` DECIMAL(10,2),
+  `promotion_start_time` DATETIME DEFAULT NULL,
+  `promotion_end_time` DATETIME DEFAULT NULL,
   `status` TINYINT DEFAULT 1,
   `deleted` TINYINT DEFAULT 0,
   `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -63,10 +76,11 @@ CREATE TABLE IF NOT EXISTS `cart` (
   `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
   `user_id` BIGINT NOT NULL,
   `product_id` BIGINT NOT NULL,
+  `product_spec` VARCHAR(200) NOT NULL DEFAULT '',
   `quantity` INT DEFAULT 1,
   `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY `uk_cart_user_product` (`user_id`, `product_id`),
+  UNIQUE KEY `uk_cart_user_product_spec` (`user_id`, `product_id`, `product_spec`),
   KEY `idx_cart_user_update` (`user_id`, `update_time`),
   FOREIGN KEY (`user_id`) REFERENCES `user`(`id`),
   FOREIGN KEY (`product_id`) REFERENCES `product`(`id`)
@@ -109,6 +123,7 @@ CREATE TABLE IF NOT EXISTS `orders` (
   `remark` VARCHAR(500),
   `payment_method` VARCHAR(50) DEFAULT NULL,
   `invoice_title` VARCHAR(100) DEFAULT NULL,
+  `invoice_tax_no` VARCHAR(50) DEFAULT NULL,
   `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `shipped_time` DATETIME DEFAULT NULL,
@@ -145,6 +160,10 @@ CREATE TABLE IF NOT EXISTS `product_review` (
   `rating` TINYINT NOT NULL COMMENT '1-5星',
   `content` VARCHAR(500) NOT NULL,
   `images` VARCHAR(1000),
+  `append_content` VARCHAR(500),
+  `append_time` DATETIME DEFAULT NULL,
+  `admin_reply` VARCHAR(500),
+  `admin_reply_time` DATETIME DEFAULT NULL,
   `status` TINYINT DEFAULT 1 COMMENT '0:隐藏 1:展示',
   `deleted` TINYINT DEFAULT 0,
   `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -198,6 +217,78 @@ CREATE TABLE IF NOT EXISTS `user_coupon` (
   `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY `uk_coupon_code` (`coupon_code`),
   KEY `idx_coupon_user_status` (`user_id`, `status`, `end_time`),
+  FOREIGN KEY (`user_id`) REFERENCES `user`(`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 用户消息表
+CREATE TABLE IF NOT EXISTS `user_message` (
+  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL,
+  `type` VARCHAR(30) DEFAULT 'system',
+  `title` VARCHAR(100) NOT NULL,
+  `content` VARCHAR(500) NOT NULL,
+  `read_status` TINYINT DEFAULT 0,
+  `read_time` DATETIME DEFAULT NULL,
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  KEY `idx_message_user_read_time` (`user_id`, `read_status`, `create_time`),
+  FOREIGN KEY (`user_id`) REFERENCES `user`(`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 商品浏览历史表
+CREATE TABLE IF NOT EXISTS `product_view_history` (
+  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL,
+  `product_id` BIGINT NOT NULL,
+  `view_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `uk_view_user_product` (`user_id`, `product_id`),
+  KEY `idx_view_user_time` (`user_id`, `view_time`),
+  FOREIGN KEY (`user_id`) REFERENCES `user`(`id`),
+  FOREIGN KEY (`product_id`) REFERENCES `product`(`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 售后申请表
+CREATE TABLE IF NOT EXISTS `after_sale` (
+  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL,
+  `order_id` BIGINT NOT NULL,
+  `order_no` VARCHAR(50) NOT NULL,
+  `type` VARCHAR(20) NOT NULL,
+  `reason` VARCHAR(500) NOT NULL,
+  `amount` DECIMAL(10,2) DEFAULT 0,
+  `status` TINYINT DEFAULT 0 COMMENT '0:待审核 1:已同意 2:已拒绝 3:已完成',
+  `audit_remark` VARCHAR(500) DEFAULT NULL,
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY `idx_after_sale_user_time` (`user_id`, `create_time`),
+  KEY `idx_after_sale_order` (`order_id`),
+  FOREIGN KEY (`user_id`) REFERENCES `user`(`id`),
+  FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 优惠券模板表
+CREATE TABLE IF NOT EXISTS `coupon_template` (
+  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+  `name` VARCHAR(100) NOT NULL,
+  `description` VARCHAR(255),
+  `discount_amount` DECIMAL(10,2) NOT NULL,
+  `min_amount` DECIMAL(10,2) DEFAULT 0,
+  `valid_days` INT DEFAULT 30,
+  `status` TINYINT DEFAULT 1,
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY `idx_coupon_template_status` (`status`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 用户发票信息表
+CREATE TABLE IF NOT EXISTS `user_invoice` (
+  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL,
+  `title` VARCHAR(100) NOT NULL,
+  `tax_no` VARCHAR(50) DEFAULT NULL,
+  `is_default` TINYINT DEFAULT 0,
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY `idx_invoice_user_default` (`user_id`, `is_default`),
   FOREIGN KEY (`user_id`) REFERENCES `user`(`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

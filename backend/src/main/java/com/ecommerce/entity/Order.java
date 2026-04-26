@@ -24,6 +24,7 @@ public class Order {
     private String remark;
     private String paymentMethod;
     private String invoiceTitle;
+    private String invoiceTaxNo;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)
@@ -65,6 +66,8 @@ public class Order {
     public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
     public String getInvoiceTitle() { return invoiceTitle; }
     public void setInvoiceTitle(String invoiceTitle) { this.invoiceTitle = invoiceTitle; }
+    public String getInvoiceTaxNo() { return invoiceTaxNo; }
+    public void setInvoiceTaxNo(String invoiceTaxNo) { this.invoiceTaxNo = invoiceTaxNo; }
     public LocalDateTime getCreateTime() { return createTime; }
     public void setCreateTime(LocalDateTime createTime) { this.createTime = createTime; }
     public LocalDateTime getUpdateTime() { return updateTime; }

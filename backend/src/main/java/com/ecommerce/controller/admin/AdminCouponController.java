@@ -3,15 +3,21 @@ package com.ecommerce.controller.admin;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ecommerce.entity.User;
+import com.ecommerce.entity.CouponTemplate;
 import com.ecommerce.entity.UserCoupon;
+import com.ecommerce.mapper.CouponTemplateMapper;
 import com.ecommerce.mapper.UserCouponMapper;
 import com.ecommerce.mapper.UserMapper;
+import com.ecommerce.service.CouponService;
+import com.ecommerce.service.MessageService;
 import com.ecommerce.util.Result;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,6 +36,9 @@ public class AdminCouponController {
 
     private final UserCouponMapper userCouponMapper;
     private final UserMapper userMapper;
+    private final CouponTemplateMapper couponTemplateMapper;
+    private final CouponService couponService;
+    private final MessageService messageService;
 
     @GetMapping
     public Result<?> list(@RequestParam(defaultValue = "1") int page,
@@ -82,6 +91,63 @@ public class AdminCouponController {
         }
         userCouponMapper.deleteById(id);
         return Result.success("优惠券删除成功");
+    }
+
+    @GetMapping("/templates")
+    public Result<?> listTemplates() {
+        return Result.success(couponTemplateMapper.selectList(new QueryWrapper<CouponTemplate>().orderByDesc("id")));
+    }
+
+    @PostMapping("/templates")
+    public Result<?> createTemplate(@RequestBody CouponTemplate template) {
+        Result<?> validation = validateTemplate(template);
+        if (validation != null) {
+            return validation;
+        }
+        template.setStatus(template.getStatus() == null ? 1 : template.getStatus());
+        couponTemplateMapper.insert(template);
+        return Result.success("优惠券模板已创建", template.getId());
+    }
+
+    @PostMapping("/templates/{id}/issue")
+    public Result<?> issueTemplate(@PathVariable Long id,
+                                   @RequestParam(defaultValue = "all") String target,
+                                   @RequestParam(required = false) Long userId) {
+        CouponTemplate template = couponTemplateMapper.selectById(id);
+        if (template == null || template.getStatus() == null || template.getStatus() != 1) {
+            return Result.error("优惠券模板不存在或已停用");
+        }
+        List<User> users;
+        if ("user".equalsIgnoreCase(target) && userId != null) {
+            User user = userMapper.selectById(userId);
+            users = user == null ? List.of() : List.of(user);
+        } else {
+            users = userMapper.selectList(new QueryWrapper<User>().eq("status", 1));
+        }
+        int count = 0;
+        for (User user : users) {
+            couponService.issueCoupon(user.getId(), template.getName(), template.getDescription(),
+                    template.getDiscountAmount(), template.getMinAmount(), template.getValidDays());
+            messageService.create(user.getId(), "coupon", "收到新优惠券", "你收到了一张「" + template.getName() + "」，可在结算时使用。");
+            count++;
+        }
+        return Result.success("发券完成", Map.of("issued", count));
+    }
+
+    private Result<?> validateTemplate(CouponTemplate template) {
+        if (template == null || !StringUtils.hasText(template.getName())) {
+            return Result.error("模板名称不能为空");
+        }
+        if (template.getDiscountAmount() == null || template.getDiscountAmount().signum() <= 0) {
+            return Result.error("优惠金额必须大于0");
+        }
+        if (template.getMinAmount() == null || template.getMinAmount().signum() < 0) {
+            return Result.error("使用门槛不能小于0");
+        }
+        template.setName(template.getName().trim());
+        template.setDescription(StringUtils.hasText(template.getDescription()) ? template.getDescription().trim() : null);
+        template.setValidDays(Math.min(Math.max(template.getValidDays() == null ? 30 : template.getValidDays(), 1), 365));
+        return null;
     }
 
     private List<Long> findMatchedUserIds(String keyword) {

@@ -1,6 +1,6 @@
 <template>
   <div id="app">
-    <template v-if="isAdminRoute">
+    <template v-if="isFullPageRoute">
       <router-view />
     </template>
     <template v-else>
@@ -12,6 +12,7 @@
           </transition>
         </router-view>
       </main>
+      <FloatingToolbar />
       <Footer />
     </template>
     <BackToTop />
@@ -24,9 +25,10 @@ import { useRoute } from 'vue-router'
 import Header from './components/Header.vue'
 import Footer from './components/Footer.vue'
 import BackToTop from './components/BackToTop.vue'
+import FloatingToolbar from './components/FloatingToolbar.vue'
 
 const route = useRoute()
-const isAdminRoute = computed(() => route.path.startsWith('/admin'))
+const isFullPageRoute = computed(() => route.path.startsWith('/admin') || route.path === '/service')
 </script>
 
 <style>

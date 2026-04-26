@@ -1,8 +1,8 @@
-# 拾光优选
+# 拾光
 
 [![CI](https://github.com/0yunxi6/shiguang-youxuan/actions/workflows/ci.yml/badge.svg)](https://github.com/0yunxi6/shiguang-youxuan/actions/workflows/ci.yml)
 
-拾光优选是一个前后端分离的电商平台示例项目，包含用户端商城、购物车、订单、商品评价、收藏、优惠券以及后台管理等功能。
+拾光是一个前后端分离的电商平台示例项目，包含用户端商城、购物车、订单、商品评价、收藏、优惠券以及后台管理等功能。
 
 ## 技术栈
 
@@ -37,16 +37,17 @@
 
 - 用户注册、登录、JWT 鉴权
 - 商品列表、分类筛选、搜索、详情
-- 搜索条件 URL 同步、库存筛选、销量/价格/最新排序
-- 商品相关推荐、最近浏览记录
-- 购物车、下单、模拟支付、取消订单、确认收货
+- 搜索条件 URL 同步、库存/品牌/评分筛选、销量/价格/最新排序、热门搜索与搜索建议
+- 商品相关推荐、猜你喜欢、最近浏览记录、商品规格、活动价、商品视频
+- 购物车、下单、模拟支付、取消订单、确认收货、满 99 包邮、发票信息
 - 一键清空购物车
-- 商品收藏、商品评价
-- 优惠券管理
-- 个人资料、密码修改、收货地址管理
-- 后台管理：仪表盘、商品、分类、订单、用户、评价、收藏、优惠券
+- 商品收藏、商品评价、追评、商家回复
+- 优惠券模板、批量发券、新人礼包、积分兑换优惠券
+- 个人资料、密码修改、收货地址、消息中心、浏览历史、售后进度、发票抬头
+- AI 客服工作台：GLM-5.1 对话、本地兜底回复、客户信息与最近订单快捷操作
+- 后台管理：仪表盘、商品、分类、订单、用户、评价、收藏、优惠券、售后
 - 后台批量上下架、订单批量发货/完成/取消、库存预警、CSV 导出
-- 登录失败限流、后台操作审计日志
+- 登录失败限流、JWT 黑名单、接口限流、后台操作审计日志
 - 文件上传与静态资源访问
 
 ## 功能规划
@@ -116,6 +117,16 @@ cp .env.example .env
 ```
 
 2. 修改 `.env` 中的数据库密码、JWT 密钥等配置。
+
+   如需启用 GLM-5.1 AI 客服，在 `.env` 中配置：
+
+```bash
+GLM_API_KEY=你的 GLM Key
+GLM_API_ENDPOINT=https://api.z.ai/api/paas/v4/chat/completions
+GLM_MODEL=glm-5.1
+```
+
+   未配置 `GLM_API_KEY` 时，AI 客服页面仍会使用本地兜底回复，保证功能可演示。
 
 3. 启动所有服务：
 
@@ -232,10 +243,13 @@ docker compose down
 | `SPRING_REDIS_HOST` | Redis 主机名 |
 | `JWT_SECRET` | JWT 签名密钥，生产环境必须替换 |
 | `APP_CORS_ALLOWED_ORIGINS` | 允许跨域访问的前端地址 |
+| `GLM_API_KEY` | GLM-5.1 AI 客服 Key，建议只放在本地 `.env` 或服务器环境变量 |
+| `GLM_API_ENDPOINT` | GLM OpenAI 兼容接口地址，默认 `https://api.z.ai/api/paas/v4/chat/completions` |
+| `GLM_MODEL` | AI 客服模型，默认 `glm-5.1` |
 | `BACKEND_PORT` | 后端映射端口 |
 | `FRONTEND_PORT` | 前端映射端口 |
 
-> 注意：不要把 `.env` 提交到 GitHub。
+> 注意：不要把 `.env` 或任何真实 API Key 提交到 GitHub。
 
 ## CI/CD
 

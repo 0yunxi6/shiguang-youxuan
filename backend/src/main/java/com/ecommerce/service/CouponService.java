@@ -29,6 +29,7 @@ public class CouponService {
 
     private final UserCouponMapper userCouponMapper;
     private final UserMapper userMapper;
+    private final MessageService messageService;
 
     public Result<?> getMyCoupons(BigDecimal orderAmount, boolean availableOnly) {
         User user = getCurrentUser();
@@ -108,6 +109,40 @@ public class CouponService {
         }
     }
 
+    public void issueCoupon(Long userId, String name, String description, BigDecimal discountAmount,
+                            BigDecimal minAmount, Integer validDays) {
+        int days = Math.min(Math.max(validDays == null ? 30 : validDays, 1), 365);
+        LocalDateTime now = LocalDateTime.now();
+        insertCoupon(userId, name, description, discountAmount, minAmount, now, now.plusDays(days));
+    }
+
+    public Result<?> exchangeByPoints(int points) {
+        int safePoints = normalizeExchangePoints(points);
+        User user = getCurrentUser();
+        int currentPoints = user.getPoints() == null ? 0 : user.getPoints();
+        if (currentPoints < safePoints) {
+            return Result.error("积分不足，当前可用积分：" + currentPoints);
+        }
+        BigDecimal discountAmount = switch (safePoints) {
+            case 300 -> new BigDecimal("20");
+            case 800 -> new BigDecimal("60");
+            default -> new BigDecimal("5");
+        };
+        BigDecimal minAmount = switch (safePoints) {
+            case 300 -> new BigDecimal("100");
+            case 800 -> new BigDecimal("300");
+            default -> new BigDecimal("30");
+        };
+        user.setPoints(currentPoints - safePoints);
+        user.setUpdateTime(LocalDateTime.now());
+        userMapper.updateById(user);
+        issueCoupon(user.getId(), "积分兑换券", "使用" + safePoints + "积分兑换，满" + minAmount.stripTrailingZeros().toPlainString() + "减" + discountAmount.stripTrailingZeros().toPlainString(),
+                discountAmount, minAmount, 30);
+        messageService.create(user.getId(), "coupon", "积分兑换成功",
+                "你已使用 " + safePoints + " 积分兑换优惠券，可在结算时使用。");
+        return Result.success("兑换成功");
+    }
+
     public String buildCouponDisplay(UserCoupon coupon) {
         if (coupon == null) {
             return null;
@@ -135,6 +170,16 @@ public class CouponService {
         coupon.setCreateTime(LocalDateTime.now());
         coupon.setUpdateTime(LocalDateTime.now());
         userCouponMapper.insert(coupon);
+    }
+
+    private int normalizeExchangePoints(int points) {
+        if (points >= 800) {
+            return 800;
+        }
+        if (points >= 300) {
+            return 300;
+        }
+        return 100;
     }
 
     private void refreshExpiredCoupons(Long userId) {

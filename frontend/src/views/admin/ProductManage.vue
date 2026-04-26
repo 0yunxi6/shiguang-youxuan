@@ -158,12 +158,41 @@
         <el-form-item label="品牌">
           <el-input v-model="form.brand" placeholder="请输入品牌，如 Apple / 华为 / Nike" maxlength="100" show-word-limit />
         </el-form-item>
+        <el-form-item label="规格">
+          <el-input
+            v-model="form.specs"
+            type="textarea"
+            :rows="3"
+            placeholder="示例：颜色:黑色,白色；尺码:S,M,L（也支持 JSON）"
+            maxlength="1000"
+            show-word-limit
+          />
+        </el-form-item>
         <div class="form-row">
           <el-form-item label="价格" prop="price" class="half">
             <el-input-number v-model="form.price" :min="0" :precision="2" style="width: 100%" />
           </el-form-item>
           <el-form-item label="库存" prop="stock" class="half">
             <el-input-number v-model="form.stock" :min="0" style="width: 100%" />
+          </el-form-item>
+        </div>
+        <el-form-item label="视频">
+          <el-input v-model="form.videoUrl" placeholder="商品视频 URL（可选）" maxlength="500" show-word-limit />
+        </el-form-item>
+        <div class="form-row">
+          <el-form-item label="活动标签" class="half">
+            <el-input v-model="form.promotionTag" placeholder="限时秒杀 / 满减活动" maxlength="50" />
+          </el-form-item>
+          <el-form-item label="活动价" class="half">
+            <el-input-number v-model="form.promotionPrice" :min="0" :precision="2" style="width: 100%" />
+          </el-form-item>
+        </div>
+        <div class="form-row">
+          <el-form-item label="开始时间" class="half">
+            <el-date-picker v-model="form.promotionStartTime" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="可选" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="结束时间" class="half">
+            <el-date-picker v-model="form.promotionEndTime" type="datetime" value-format="YYYY-MM-DDTHH:mm:ss" placeholder="可选" style="width: 100%" />
           </el-form-item>
         </div>
         <el-form-item label="图片">
@@ -282,6 +311,12 @@ const form = reactive({
   name: '',
   categoryId: null,
   brand: '',
+  specs: '',
+  videoUrl: '',
+  promotionTag: '',
+  promotionPrice: null,
+  promotionStartTime: null,
+  promotionEndTime: null,
   price: 0,
   stock: 0,
   imageUrl: '',
@@ -358,6 +393,12 @@ const openDialog = (row) => {
       name: '',
       categoryId: null,
       brand: '',
+      specs: '',
+      videoUrl: '',
+      promotionTag: '',
+      promotionPrice: null,
+      promotionStartTime: null,
+      promotionEndTime: null,
       price: 0,
       stock: 0,
       imageUrl: '',

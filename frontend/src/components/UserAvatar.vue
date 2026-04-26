@@ -1,7 +1,6 @@
 <template>
   <div class="user-avatar" :style="wrapStyle">
-    <img v-if="src && !imgError" :src="src" :alt="name" @error="imgError = true" />
-    <span v-else class="avatar-letter">{{ letter }}</span>
+    <img :src="avatarSrc" :alt="name || '默认头像'" @error="imgError = true" />
   </div>
 </template>
 
@@ -15,7 +14,7 @@ const props = defineProps({
 })
 
 const imgError = ref(false)
-const letter = computed(() => props.name?.charAt(0)?.toUpperCase() || 'U')
+const avatarSrc = computed(() => (props.src && !imgError.value) ? props.src : '/default-avatar.png')
 const wrapStyle = computed(() => ({
   width: props.size + 'px',
   height: props.size + 'px',
@@ -38,10 +37,5 @@ const wrapStyle = computed(() => ({
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-.avatar-letter {
-  font-weight: 700;
-  line-height: 1;
-  user-select: none;
 }
 </style>

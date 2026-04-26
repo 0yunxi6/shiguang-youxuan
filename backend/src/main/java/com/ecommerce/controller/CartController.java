@@ -17,7 +17,7 @@ public class CartController {
 
     @PostMapping("/add")
     public Result<?> addToCart(@Valid @RequestBody CartItemRequest request) {
-        return cartService.addToCart(request.getProductId(), request.getQuantity());
+        return cartService.addToCart(request.getProductId(), request.getQuantity(), request.getProductSpec());
     }
 
     @GetMapping

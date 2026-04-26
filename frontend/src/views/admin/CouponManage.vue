@@ -28,6 +28,32 @@
       </button>
     </div>
 
+    <div class="template-panel">
+      <div class="template-header">
+        <div>
+          <h3>优惠券模板 / 批量发券</h3>
+          <p>创建满减券模板，可一键发放给全部正常用户。</p>
+        </div>
+        <button class="btn-search" @click="loadTemplates">刷新模板</button>
+      </div>
+      <form class="template-form" @submit.prevent="createTemplate">
+        <input v-model.trim="templateForm.name" placeholder="模板名称，如 周末满减券" required />
+        <input v-model.number="templateForm.discountAmount" type="number" min="1" placeholder="优惠金额" required />
+        <input v-model.number="templateForm.minAmount" type="number" min="0" placeholder="使用门槛" required />
+        <input v-model.number="templateForm.validDays" type="number" min="1" max="365" placeholder="有效天数" required />
+        <input v-model.trim="templateForm.description" placeholder="描述（可选）" />
+        <button class="btn-search" type="submit">创建模板</button>
+      </form>
+      <div class="template-list" v-if="templates.length">
+        <div v-for="tpl in templates" :key="tpl.id" class="template-card">
+          <strong>{{ tpl.name }}</strong>
+          <span>{{ tpl.description || `满${formatAmount(tpl.minAmount)}减${formatAmount(tpl.discountAmount)}` }}</span>
+          <small>{{ tpl.validDays || 30 }} 天有效 · {{ tpl.status === 1 ? '启用' : '停用' }}</small>
+          <button class="btn-sm" :disabled="tpl.status !== 1" @click="issueTemplate(tpl)">发给全部用户</button>
+        </div>
+      </div>
+    </div>
+
     <div class="table-wrap">
       <table class="data-table">
         <thead>
@@ -146,6 +172,15 @@ const statusFilter = ref(null)
 const page = ref(1)
 const pageSize = 10
 const total = ref(0)
+const templates = ref([])
+const templateForm = ref({
+  name: '',
+  description: '',
+  discountAmount: 10,
+  minAmount: 50,
+  validDays: 30,
+  status: 1
+})
 
 const deleteVisible = ref(false)
 const deleteTarget = ref(null)
@@ -176,6 +211,28 @@ const loadCoupons = async () => {
   }
 }
 
+const loadTemplates = async () => {
+  try {
+    const res = await request.get('/admin/coupons/templates')
+    templates.value = res.data || []
+  } catch (e) {
+    templates.value = []
+  }
+}
+
+const createTemplate = async () => {
+  await request.post('/admin/coupons/templates', templateForm.value)
+  ElMessage.success('优惠券模板已创建')
+  templateForm.value = { name: '', description: '', discountAmount: 10, minAmount: 50, validDays: 30, status: 1 }
+  await loadTemplates()
+}
+
+const issueTemplate = async (tpl) => {
+  const res = await request.post(`/admin/coupons/templates/${tpl.id}/issue`, null, { params: { target: 'all' } })
+  ElMessage.success(`发券完成，共发放 ${res.data?.issued || 0} 张`)
+  loadCoupons()
+}
+
 const handleDelete = (row) => {
   deleteTarget.value = row
   deleteVisible.value = true
@@ -197,6 +254,7 @@ const confirmDelete = async () => {
 
 onMounted(() => {
   loadCoupons()
+  loadTemplates()
 })
 </script>
 
@@ -233,6 +291,75 @@ onMounted(() => {
   gap: 12px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+}
+
+.template-panel {
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.template-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.template-header h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  color: #111;
+}
+
+.template-header p {
+  margin: 0;
+  color: #909399;
+  font-size: 13px;
+}
+
+.template-form {
+  display: grid;
+  grid-template-columns: 1.2fr repeat(3, 0.7fr) 1.4fr auto;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.template-form input {
+  min-width: 0;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.template-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.template-card {
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #fafaf8;
+}
+
+.template-card strong {
+  color: #111;
+}
+
+.template-card span,
+.template-card small {
+  color: #909399;
+  font-size: 12px;
 }
 
 .search-box {

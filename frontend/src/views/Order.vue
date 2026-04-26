@@ -50,6 +50,7 @@
             <img :src="item.productImage || '/placeholder.svg'" class="item-thumb" />
             <div class="item-detail">
               <span class="item-name">{{ item.productName }}</span>
+              <span class="item-spec" v-if="item.productSpec">{{ item.productSpec }}</span>
               <span class="item-meta">¥{{ item.price }} × {{ item.quantity }}</span>
             </div>
           </div>
@@ -76,6 +77,7 @@
               <button v-if="order.status === 0" class="btn-action pay" :disabled="actionLoadingId === order.id" @click="handlePay(order)">立即支付</button>
               <button v-if="order.canCancel" class="btn-action ghost" :disabled="actionLoadingId === order.id" @click="handleCancel(order)">取消订单</button>
               <button v-if="order.canConfirm" class="btn-action primary" :disabled="actionLoadingId === order.id" @click="handleConfirm(order)">确认收货</button>
+              <button v-if="[1,2,3].includes(order.status)" class="btn-action ghost" :disabled="actionLoadingId === order.id" @click="handleAfterSale(order)">申请售后</button>
             </div>
           </div>
         </div>
@@ -86,8 +88,8 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { cancelOrder, confirmOrder, getOrderList, payOrder } from '../api'
-import { ElMessage } from 'element-plus'
+import { cancelOrder, confirmOrder, getOrderList, payOrder, createAfterSale } from '../api'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const orders = ref([])
 const loading = ref(true)
@@ -168,6 +170,23 @@ const handleConfirm = async (order) => {
   }
 }
 
+const handleAfterSale = async (order) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请填写退款/退货/换货原因（至少4个字）', '申请售后', {
+      confirmButtonText: '提交申请',
+      cancelButtonText: '取消',
+      inputType: 'textarea',
+      inputPlaceholder: '例如：商品尺码不合适，希望换货',
+      inputValidator: (val) => String(val || '').trim().length >= 4 || '原因至少4个字'
+    })
+    actionLoadingId.value = order.id
+    await createAfterSale({ orderId: order.id, type: 'refund', reason: value })
+    ElMessage.success('售后申请已提交')
+  } finally {
+    actionLoadingId.value = null
+  }
+}
+
 onMounted(() => { loadOrders() })
 </script>
 
@@ -230,6 +249,7 @@ onMounted(() => { loadOrders() })
 .item-thumb { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; background: #fafaf8; }
 .item-detail { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .item-name { font-size: 14px; font-weight: 600; color: #111; }
+.item-spec { font-size: 12px; color: #c45c3e; }
 .item-meta { font-size: 13px; color: #999; }
 
 .order-footer {

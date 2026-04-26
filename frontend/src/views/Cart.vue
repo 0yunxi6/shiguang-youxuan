@@ -79,6 +79,7 @@
                 <h3 @click="$router.push(`/product/${item.productId}`)">
                   {{ item.productName }}
                 </h3>
+                <p class="item-spec" v-if="item.productSpec">{{ item.productSpec }}</p>
                 <p class="item-desc">{{ item.description || '暂无描述' }}</p>
                 <p class="invalid-tip" v-if="!item.available">商品已下架、售罄或库存不足，请调整后再结算</p>
               </div>
@@ -218,7 +219,7 @@ const totalCount = computed(() =>
 
 const shippingFee = computed(() => {
   const total = parseFloat(totalPrice.value)
-  return total >= 99 || total === 0 ? 0 : 10
+  return total >= 99 || total === 0 ? 0 : 8
 })
 
 const discount = computed(() => {
@@ -559,6 +560,12 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.item-spec {
+  font-size: 12px;
+  color: #c45c3e;
+  margin: 0 0 2px;
 }
 
 .invalid-tip {

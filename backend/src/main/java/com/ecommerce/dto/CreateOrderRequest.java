@@ -30,6 +30,9 @@ public class CreateOrderRequest {
     @Size(max = 100, message = "发票抬头不能超过100个字符")
     private String invoiceTitle;
 
+    @Size(max = 50, message = "纳税人识别号不能超过50个字符")
+    private String invoiceTaxNo;
+
     private List<Long> cartItemIds;
 
     public String getReceiverName() { return receiverName; }
@@ -46,6 +49,8 @@ public class CreateOrderRequest {
     public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
     public String getInvoiceTitle() { return invoiceTitle; }
     public void setInvoiceTitle(String invoiceTitle) { this.invoiceTitle = invoiceTitle; }
+    public String getInvoiceTaxNo() { return invoiceTaxNo; }
+    public void setInvoiceTaxNo(String invoiceTaxNo) { this.invoiceTaxNo = invoiceTaxNo; }
     public List<Long> getCartItemIds() { return cartItemIds; }
     public void setCartItemIds(List<Long> cartItemIds) { this.cartItemIds = cartItemIds; }
 }

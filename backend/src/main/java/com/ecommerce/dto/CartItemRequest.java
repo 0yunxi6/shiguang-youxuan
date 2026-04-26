@@ -12,8 +12,12 @@ public class CartItemRequest {
     @Max(value = 99, message = "单件商品最多购买99件")
     private Integer quantity = 1;
 
+    private String productSpec;
+
     public Long getProductId() { return productId; }
     public void setProductId(Long productId) { this.productId = productId; }
     public Integer getQuantity() { return quantity; }
     public void setQuantity(Integer quantity) { this.quantity = quantity; }
+    public String getProductSpec() { return productSpec; }
+    public void setProductSpec(String productSpec) { this.productSpec = productSpec; }
 }

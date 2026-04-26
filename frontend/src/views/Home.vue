@@ -43,9 +43,19 @@
           <div class="flash-img"><img :src="product.imageUrl || '/placeholder.svg'" :alt="product.name" /><span class="flash-badge">特惠</span></div>
           <div class="flash-meta">
             <span class="flash-name">{{ product.name }}</span>
-            <div class="flash-prices"><span class="flash-now">¥{{ product.price }}</span><span class="flash-was">¥{{ (product.price * 1.3).toFixed(0) }}</span></div>
+            <div class="flash-prices"><span class="flash-now">¥{{ product.effectivePrice || product.price }}</span><span class="flash-was">¥{{ product.price }}</span></div>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section class="section personal-section" v-if="personalProducts.length">
+      <div class="section-bar">
+        <h2>猜你喜欢</h2>
+        <span class="section-hint">基于浏览历史和热销商品推荐</span>
+      </div>
+      <div class="product-grid">
+        <ProductCard v-for="product in personalProducts" :key="product.id" :product="product" @click="$router.push(`/product/${product.id}`)" @add-cart="handleAddCart" @toggle-favorite="toggleFavorite" />
       </div>
     </section>
 
@@ -95,7 +105,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { getProductList } from '../api'
+import { getPersonalRecommendations, getProductList } from '../api'
 import { useCartStore } from '../store/cart'
 import { useCategoryStore } from '../store/category'
 import { useAddToCart } from '../composables/useAddToCart'
@@ -125,6 +135,7 @@ const banners = [
   { tag: '会员专享', title: '每周上新，惊喜不断', desc: '注册即享新人专属优惠', bg: 'linear-gradient(135deg, #5a6e5a 0%, #3d4d3d 100%)', cta: '了解详情', link: '/search?keyword=推荐' }
 ]
 const flashProducts = ref([])
+const personalProducts = ref([])
 const recentlyViewed = ref([])
 const countdown = reactive({ hours: '00', minutes: '00', seconds: '00' })
 let countdownTimer = null
@@ -170,6 +181,14 @@ const loadRecentlyViewed = () => {
     recentlyViewed.value = []
   }
 }
+const loadPersonalProducts = async () => {
+  try {
+    const res = await getPersonalRecommendations({ limit: 8 })
+    personalProducts.value = res.data || []
+  } catch (error) {
+    personalProducts.value = []
+  }
+}
 const clearRecentlyViewed = () => {
   localStorage.removeItem('recentlyViewedProducts')
   recentlyViewed.value = []
@@ -183,6 +202,7 @@ onMounted(async () => {
     flashProducts.value = products.value.slice(0, 4)
   } catch (e) { console.error(e) } finally { loading.value = false }
   loadRecentlyViewed()
+  await loadPersonalProducts()
   startAutoPlay(); updateCountdown(); countdownTimer = setInterval(updateCountdown, 1000)
 })
 onUnmounted(() => { pauseAutoPlay(); clearInterval(countdownTimer) })
@@ -219,6 +239,7 @@ onUnmounted(() => { pauseAutoPlay(); clearInterval(countdownTimer) })
 .section { padding: 28px 0; }
 .section-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .section-bar h2 { font-size: 18px; font-weight: 700; color: #1a1a1a; margin: 0; }
+.section-hint { font-size: 13px; color: #999; }
 .section-title-group { display: flex; align-items: center; gap: 14px; }
 .see-more { font-size: 13px; color: #999; transition: color 0.2s; }
 .see-more:hover { color: #666; }

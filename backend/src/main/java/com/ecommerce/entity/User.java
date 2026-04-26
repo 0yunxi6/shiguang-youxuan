@@ -15,6 +15,13 @@ public class User {
     private String avatar;
     private String role;
     private Integer status;
+    private String statusReason;
+    private String level;
+    private Integer points;
+    private Integer emailVerified;
+    private Integer twoFactorEnabled;
+    private LocalDateTime lastLoginTime;
+    private String lastLoginIp;
     @TableLogic
     private Integer deleted;
     @TableField(fill = FieldFill.INSERT)
@@ -40,6 +47,20 @@ public class User {
     public void setRole(String role) { this.role = role; }
     public Integer getStatus() { return status; }
     public void setStatus(Integer status) { this.status = status; }
+    public String getStatusReason() { return statusReason; }
+    public void setStatusReason(String statusReason) { this.statusReason = statusReason; }
+    public String getLevel() { return level; }
+    public void setLevel(String level) { this.level = level; }
+    public Integer getPoints() { return points; }
+    public void setPoints(Integer points) { this.points = points; }
+    public Integer getEmailVerified() { return emailVerified; }
+    public void setEmailVerified(Integer emailVerified) { this.emailVerified = emailVerified; }
+    public Integer getTwoFactorEnabled() { return twoFactorEnabled; }
+    public void setTwoFactorEnabled(Integer twoFactorEnabled) { this.twoFactorEnabled = twoFactorEnabled; }
+    public LocalDateTime getLastLoginTime() { return lastLoginTime; }
+    public void setLastLoginTime(LocalDateTime lastLoginTime) { this.lastLoginTime = lastLoginTime; }
+    public String getLastLoginIp() { return lastLoginIp; }
+    public void setLastLoginIp(String lastLoginIp) { this.lastLoginIp = lastLoginIp; }
     public Integer getDeleted() { return deleted; }
     public void setDeleted(Integer deleted) { this.deleted = deleted; }
     public LocalDateTime getCreateTime() { return createTime; }

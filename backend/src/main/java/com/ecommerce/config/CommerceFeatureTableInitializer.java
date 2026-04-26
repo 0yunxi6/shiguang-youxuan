@@ -19,11 +19,16 @@ public class CommerceFeatureTableInitializer {
         return args -> {
             try (Connection connection = dataSource.getConnection();
                 Statement statement = connection.createStatement()) {
+                ensureUserColumns(connection, statement);
                 ensureProductImagesColumn(connection, statement);
                 ensureProductBrandColumn(connection, statement);
+                ensureProductMediumColumns(connection, statement);
+                ensureReviewMediumColumns(connection, statement);
+                ensureCartSpecColumn(connection, statement);
                 ensureOrdersColumns(connection, statement);
                 ensureUserAddressTable(statement);
                 ensureSearchLogTable(statement);
+                ensureMediumFeatureTables(statement);
                 statement.execute("""
                         CREATE TABLE IF NOT EXISTS `product_favorite` (
                           `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -75,6 +80,43 @@ public class CommerceFeatureTableInitializer {
         }
     }
 
+    private void ensureUserColumns(Connection connection, Statement statement) throws SQLException {
+        addColumnIfMissing(connection, statement, "user", "status_reason", "ALTER TABLE `user` ADD COLUMN `status_reason` VARCHAR(255) DEFAULT NULL AFTER `status`");
+        addColumnIfMissing(connection, statement, "user", "level", "ALTER TABLE `user` ADD COLUMN `level` VARCHAR(20) DEFAULT '普通会员' AFTER `status_reason`");
+        addColumnIfMissing(connection, statement, "user", "points", "ALTER TABLE `user` ADD COLUMN `points` INT DEFAULT 0 AFTER `level`");
+        addColumnIfMissing(connection, statement, "user", "email_verified", "ALTER TABLE `user` ADD COLUMN `email_verified` TINYINT DEFAULT 0 AFTER `points`");
+        addColumnIfMissing(connection, statement, "user", "two_factor_enabled", "ALTER TABLE `user` ADD COLUMN `two_factor_enabled` TINYINT DEFAULT 0 AFTER `email_verified`");
+        addColumnIfMissing(connection, statement, "user", "last_login_time", "ALTER TABLE `user` ADD COLUMN `last_login_time` DATETIME DEFAULT NULL AFTER `two_factor_enabled`");
+        addColumnIfMissing(connection, statement, "user", "last_login_ip", "ALTER TABLE `user` ADD COLUMN `last_login_ip` VARCHAR(64) DEFAULT NULL AFTER `last_login_time`");
+    }
+
+    private void ensureProductMediumColumns(Connection connection, Statement statement) throws SQLException {
+        addColumnIfMissing(connection, statement, "product", "specs", "ALTER TABLE `product` ADD COLUMN `specs` VARCHAR(1000) DEFAULT NULL AFTER `images`");
+        addColumnIfMissing(connection, statement, "product", "video_url", "ALTER TABLE `product` ADD COLUMN `video_url` VARCHAR(500) DEFAULT NULL AFTER `specs`");
+        addColumnIfMissing(connection, statement, "product", "promotion_tag", "ALTER TABLE `product` ADD COLUMN `promotion_tag` VARCHAR(50) DEFAULT NULL AFTER `video_url`");
+        addColumnIfMissing(connection, statement, "product", "promotion_price", "ALTER TABLE `product` ADD COLUMN `promotion_price` DECIMAL(10,2) DEFAULT NULL AFTER `promotion_tag`");
+        addColumnIfMissing(connection, statement, "product", "promotion_start_time", "ALTER TABLE `product` ADD COLUMN `promotion_start_time` DATETIME DEFAULT NULL AFTER `promotion_price`");
+        addColumnIfMissing(connection, statement, "product", "promotion_end_time", "ALTER TABLE `product` ADD COLUMN `promotion_end_time` DATETIME DEFAULT NULL AFTER `promotion_start_time`");
+    }
+
+    private void ensureReviewMediumColumns(Connection connection, Statement statement) throws SQLException {
+        addColumnIfMissing(connection, statement, "product_review", "append_content", "ALTER TABLE `product_review` ADD COLUMN `append_content` VARCHAR(500) DEFAULT NULL AFTER `images`");
+        addColumnIfMissing(connection, statement, "product_review", "append_time", "ALTER TABLE `product_review` ADD COLUMN `append_time` DATETIME DEFAULT NULL AFTER `append_content`");
+        addColumnIfMissing(connection, statement, "product_review", "admin_reply", "ALTER TABLE `product_review` ADD COLUMN `admin_reply` VARCHAR(500) DEFAULT NULL AFTER `append_time`");
+        addColumnIfMissing(connection, statement, "product_review", "admin_reply_time", "ALTER TABLE `product_review` ADD COLUMN `admin_reply_time` DATETIME DEFAULT NULL AFTER `admin_reply`");
+    }
+
+    private void ensureCartSpecColumn(Connection connection, Statement statement) throws SQLException {
+        addColumnIfMissing(connection, statement, "cart", "product_spec", "ALTER TABLE `cart` ADD COLUMN `product_spec` VARCHAR(200) NOT NULL DEFAULT '' AFTER `product_id`");
+        statement.executeUpdate("UPDATE `cart` SET `product_spec` = '' WHERE `product_spec` IS NULL");
+        if (indexExists(connection, "cart", "uk_cart_user_product")) {
+            statement.execute("ALTER TABLE `cart` DROP INDEX `uk_cart_user_product`");
+        }
+        if (!indexExists(connection, "cart", "uk_cart_user_product_spec")) {
+            statement.execute("ALTER TABLE `cart` ADD UNIQUE KEY `uk_cart_user_product_spec` (`user_id`, `product_id`, `product_spec`)");
+        }
+    }
+
     private void ensureOrdersColumns(Connection connection, Statement statement) throws SQLException {
         addColumnIfMissing(connection, statement, "orders", "original_amount", "ALTER TABLE `orders` ADD COLUMN `original_amount` DECIMAL(10,2) DEFAULT NULL AFTER `total_amount`");
         addColumnIfMissing(connection, statement, "orders", "discount_amount", "ALTER TABLE `orders` ADD COLUMN `discount_amount` DECIMAL(10,2) DEFAULT 0 AFTER `original_amount`");
@@ -83,6 +125,7 @@ public class CommerceFeatureTableInitializer {
         addColumnIfMissing(connection, statement, "orders", "coupon_name", "ALTER TABLE `orders` ADD COLUMN `coupon_name` VARCHAR(100) DEFAULT NULL AFTER `coupon_id`");
         addColumnIfMissing(connection, statement, "orders", "payment_method", "ALTER TABLE `orders` ADD COLUMN `payment_method` VARCHAR(50) DEFAULT NULL AFTER `remark`");
         addColumnIfMissing(connection, statement, "orders", "invoice_title", "ALTER TABLE `orders` ADD COLUMN `invoice_title` VARCHAR(100) DEFAULT NULL AFTER `payment_method`");
+        addColumnIfMissing(connection, statement, "orders", "invoice_tax_no", "ALTER TABLE `orders` ADD COLUMN `invoice_tax_no` VARCHAR(50) DEFAULT NULL AFTER `invoice_title`");
         addColumnIfMissing(connection, statement, "orders", "shipped_time", "ALTER TABLE `orders` ADD COLUMN `shipped_time` DATETIME DEFAULT NULL AFTER `update_time`");
         addColumnIfMissing(connection, statement, "orders", "completed_time", "ALTER TABLE `orders` ADD COLUMN `completed_time` DATETIME DEFAULT NULL AFTER `shipped_time`");
     }
@@ -124,6 +167,81 @@ public class CommerceFeatureTableInitializer {
                 """);
     }
 
+    private void ensureMediumFeatureTables(Statement statement) throws SQLException {
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS `user_message` (
+                  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+                  `user_id` BIGINT NOT NULL,
+                  `type` VARCHAR(30) DEFAULT 'system',
+                  `title` VARCHAR(100) NOT NULL,
+                  `content` VARCHAR(500) NOT NULL,
+                  `read_status` TINYINT DEFAULT 0,
+                  `read_time` DATETIME DEFAULT NULL,
+                  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  KEY `idx_message_user_read_time` (`user_id`, `read_status`, `create_time`),
+                  CONSTRAINT `fk_message_user` FOREIGN KEY (`user_id`) REFERENCES `user`(`id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """);
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS `product_view_history` (
+                  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+                  `user_id` BIGINT NOT NULL,
+                  `product_id` BIGINT NOT NULL,
+                  `view_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  UNIQUE KEY `uk_view_user_product` (`user_id`, `product_id`),
+                  KEY `idx_view_user_time` (`user_id`, `view_time`),
+                  CONSTRAINT `fk_view_user` FOREIGN KEY (`user_id`) REFERENCES `user`(`id`),
+                  CONSTRAINT `fk_view_product` FOREIGN KEY (`product_id`) REFERENCES `product`(`id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """);
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS `after_sale` (
+                  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+                  `user_id` BIGINT NOT NULL,
+                  `order_id` BIGINT NOT NULL,
+                  `order_no` VARCHAR(50) NOT NULL,
+                  `type` VARCHAR(20) NOT NULL,
+                  `reason` VARCHAR(500) NOT NULL,
+                  `amount` DECIMAL(10,2) DEFAULT 0,
+                  `status` TINYINT DEFAULT 0 COMMENT '0:待审核 1:已同意 2:已拒绝 3:已完成',
+                  `audit_remark` VARCHAR(500) DEFAULT NULL,
+                  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                  KEY `idx_after_sale_user_time` (`user_id`, `create_time`),
+                  KEY `idx_after_sale_order` (`order_id`),
+                  CONSTRAINT `fk_after_sale_user` FOREIGN KEY (`user_id`) REFERENCES `user`(`id`),
+                  CONSTRAINT `fk_after_sale_order` FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """);
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS `coupon_template` (
+                  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+                  `name` VARCHAR(100) NOT NULL,
+                  `description` VARCHAR(255),
+                  `discount_amount` DECIMAL(10,2) NOT NULL,
+                  `min_amount` DECIMAL(10,2) DEFAULT 0,
+                  `valid_days` INT DEFAULT 30,
+                  `status` TINYINT DEFAULT 1,
+                  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                  KEY `idx_coupon_template_status` (`status`, `create_time`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """);
+        statement.execute("""
+                CREATE TABLE IF NOT EXISTS `user_invoice` (
+                  `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+                  `user_id` BIGINT NOT NULL,
+                  `title` VARCHAR(100) NOT NULL,
+                  `tax_no` VARCHAR(50) DEFAULT NULL,
+                  `is_default` TINYINT DEFAULT 0,
+                  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                  KEY `idx_invoice_user_default` (`user_id`, `is_default`),
+                  CONSTRAINT `fk_invoice_user` FOREIGN KEY (`user_id`) REFERENCES `user`(`id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """);
+    }
+
     private void addColumnIfMissing(Connection connection, Statement statement, String tableName, String columnName, String alterSql) throws SQLException {
         if (!columnExists(connection, tableName, columnName)) {
             statement.execute(alterSql);
@@ -140,6 +258,17 @@ public class CommerceFeatureTableInitializer {
                     return resultSet.getInt(1) > 0;
                 }
                 return false;
+            }
+        }
+    }
+
+    private boolean indexExists(Connection connection, String tableName, String indexName) throws SQLException {
+        try (PreparedStatement preparedStatement = connection.prepareStatement(
+                "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?")) {
+            preparedStatement.setString(1, tableName);
+            preparedStatement.setString(2, indexName);
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                return resultSet.next() && resultSet.getInt(1) > 0;
             }
         }
     }

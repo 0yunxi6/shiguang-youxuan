@@ -53,6 +53,12 @@
           <input v-model="inStockOnly" type="checkbox" @change="applyStockFilter" />
           仅看有货
         </label>
+        <select v-model.number="minRating" class="rating-select" @change="applyRatingFilter">
+          <option :value="null">全部评分</option>
+          <option :value="5">5星</option>
+          <option :value="4">4星及以上</option>
+          <option :value="3">3星及以上</option>
+        </select>
 
         <span class="result-count">{{ total }} 件商品</span>
       </div>
@@ -177,6 +183,7 @@ const minPrice = ref(null)
 const maxPrice = ref(null)
 const inStockOnly = ref(false)
 const brand = ref('')
+const minRating = ref(null)
 const searchHistory = ref([])
 const SEARCH_HISTORY_KEY = 'searchKeywordHistory'
 
@@ -220,6 +227,7 @@ const hydrateFromQuery = () => {
   maxPrice.value = parseQueryNumber(route.query.maxPrice)
   inStockOnly.value = firstQueryValue(route.query.inStockOnly) === 'true'
   brand.value = firstQueryValue(route.query.brand) || ''
+  minRating.value = parseQueryNumber(route.query.minRating)
 }
 
 const buildRouteQuery = () => {
@@ -233,6 +241,7 @@ const buildRouteQuery = () => {
   if (hasPriceValue(maxPrice.value)) query.maxPrice = String(maxPrice.value)
   if (inStockOnly.value) query.inStockOnly = 'true'
   if (brand.value) query.brand = brand.value
+  if (minRating.value) query.minRating = String(minRating.value)
   return query
 }
 
@@ -302,6 +311,7 @@ const loadProducts = async () => {
     if (hasPriceValue(maxPrice.value)) params.maxPrice = maxPrice.value
     if (inStockOnly.value) params.inStockOnly = true
     if (brand.value) params.brand = brand.value
+    if (minRating.value) params.minRating = minRating.value
 
     const res = await getProductList(params)
     products.value = res.data?.records || res.data || []
@@ -359,6 +369,11 @@ const applyStockFilter = () => {
 }
 
 const applyBrandFilter = () => {
+  page.value = 1
+  syncQueryAndLoad()
+}
+
+const applyRatingFilter = () => {
   page.value = 1
   syncQueryAndLoad()
 }
@@ -532,6 +547,19 @@ watch(() => route.query, () => {
 
 .stock-filter input {
   accent-color: #c45c3e;
+}
+
+.rating-select {
+  padding: 8px 12px;
+  border: 1.5px solid #e5e5e5;
+  border-radius: 8px;
+  background: #fff;
+  color: #666;
+  outline: none;
+}
+
+.rating-select:focus {
+  border-color: #c45c3e;
 }
 
 .result-count {

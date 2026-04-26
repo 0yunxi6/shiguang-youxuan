@@ -79,6 +79,25 @@ public class ProductReviewService {
         return Result.success("评价发布成功", review.getId());
     }
 
+    @Transactional
+    public Result<?> appendReview(Long id, String content) {
+        if (!StringUtils.hasText(content) || content.trim().length() < 4) {
+            return Result.error("追评内容至少4个字");
+        }
+        User user = getCurrentUser();
+        ProductReview review = reviewMapper.selectById(id);
+        if (review == null || !user.getId().equals(review.getUserId())) {
+            return Result.error("评价不存在");
+        }
+        if (StringUtils.hasText(review.getAppendContent())) {
+            return Result.error("该评价已追评");
+        }
+        review.setAppendContent(content.trim());
+        review.setAppendTime(LocalDateTime.now());
+        reviewMapper.updateById(review);
+        return Result.success("追评成功");
+    }
+
     public Result<?> getAdminReviews(int page, int size, Integer status, Long productId, String keyword) {
         if (status != null && status != STATUS_HIDDEN && status != STATUS_VISIBLE) {
             return Result.error("评价状态不合法");
@@ -111,6 +130,21 @@ public class ProductReviewService {
         review.setUpdateTime(LocalDateTime.now());
         reviewMapper.updateById(review);
         return Result.success(status == STATUS_VISIBLE ? "评价已展示" : "评价已隐藏");
+    }
+
+    @Transactional
+    public Result<?> replyReview(Long id, String reply) {
+        if (!StringUtils.hasText(reply) || reply.trim().length() < 2) {
+            return Result.error("回复内容至少2个字");
+        }
+        ProductReview review = reviewMapper.selectById(id);
+        if (review == null) {
+            return Result.error("评价不存在");
+        }
+        review.setAdminReply(reply.trim());
+        review.setAdminReplyTime(LocalDateTime.now());
+        reviewMapper.updateById(review);
+        return Result.success("回复已保存");
     }
 
     @Transactional

@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/admin/users")
 @RequiredArgsConstructor
@@ -45,7 +47,9 @@ public class AdminUserController {
     }
 
     @PutMapping("/{id}/status")
-    public Result<?> updateStatus(@PathVariable Long id, @RequestParam Integer status) {
+    public Result<?> updateStatus(@PathVariable Long id,
+                                  @RequestParam Integer status,
+                                  @RequestParam(required = false) String reason) {
         if (isInvalidBinaryStatus(status)) {
             return Result.error("用户状态不合法");
         }
@@ -57,8 +61,23 @@ public class AdminUserController {
             return Result.error("管理员账号不能禁用");
         }
         user.setStatus(status);
+        user.setStatusReason(StringUtils.hasText(reason) ? reason.trim() : (status == 1 ? null : "后台禁用"));
         userMapper.updateById(user);
         return Result.success("状态更新成功");
+    }
+
+    @PutMapping("/{id}/role")
+    public Result<?> updateRole(@PathVariable Long id, @RequestParam String role) {
+        if (!List.of("USER", "ADMIN", "OPERATOR", "SUPPORT").contains(role)) {
+            return Result.error("角色不合法");
+        }
+        User user = userMapper.selectById(id);
+        if (user == null) {
+            return Result.error("用户不存在");
+        }
+        user.setRole(role);
+        userMapper.updateById(user);
+        return Result.success("角色更新成功");
     }
 
     @DeleteMapping("/{id}")

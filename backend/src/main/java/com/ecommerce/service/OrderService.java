@@ -41,25 +41,26 @@ public class OrderService {
     private final UserMapper userMapper;
     private final ProductMapper productMapper;
     private final CouponService couponService;
+    private final MessageService messageService;
 
     @Transactional
     public Result<?> createOrder(String receiverName, String receiverPhone, String receiverAddress) {
-        return createOrder(receiverName, receiverPhone, receiverAddress, null, null, null, null, null);
+        return createOrder(receiverName, receiverPhone, receiverAddress, null, null, null, null, null, null);
     }
 
     @Transactional
     public Result<?> createOrder(String receiverName, String receiverPhone, String receiverAddress, String remark) {
-        return createOrder(receiverName, receiverPhone, receiverAddress, remark, null, null, null, null);
+        return createOrder(receiverName, receiverPhone, receiverAddress, remark, null, null, null, null, null);
     }
 
     @Transactional
     public Result<?> createOrder(String receiverName, String receiverPhone, String receiverAddress, String remark, List<Long> cartItemIds) {
-        return createOrder(receiverName, receiverPhone, receiverAddress, remark, null, null, null, cartItemIds);
+        return createOrder(receiverName, receiverPhone, receiverAddress, remark, null, null, null, null, cartItemIds);
     }
 
     @Transactional
     public Result<?> createOrder(String receiverName, String receiverPhone, String receiverAddress, String remark,
-                                 Long couponId, String paymentMethod, String invoiceTitle, List<Long> cartItemIds) {
+                                 Long couponId, String paymentMethod, String invoiceTitle, String invoiceTaxNo, List<Long> cartItemIds) {
         if (!StringUtils.hasText(receiverName) || !StringUtils.hasText(receiverPhone) || !StringUtils.hasText(receiverAddress)) {
             return Result.error("请完善收货信息");
         }
@@ -87,14 +88,14 @@ public class OrderService {
         for (Cart cart : carts) {
             Product product = productMap.get(cart.getProductId());
             validateCartProduct(product, cart.getQuantity());
-            originalAmount = originalAmount.add(product.getPrice().multiply(BigDecimal.valueOf(cart.getQuantity())));
+            originalAmount = originalAmount.add(effectivePrice(product).multiply(BigDecimal.valueOf(cart.getQuantity())));
         }
 
         UserCoupon coupon = couponService.validateCouponForOrder(user.getId(), couponId, originalAmount);
         BigDecimal discountAmount = coupon == null || coupon.getDiscountAmount() == null
                 ? BigDecimal.ZERO
                 : coupon.getDiscountAmount();
-        BigDecimal shippingFee = BigDecimal.ZERO;
+        BigDecimal shippingFee = calculateShippingFee(originalAmount);
         BigDecimal totalAmount = originalAmount.subtract(discountAmount).add(shippingFee);
         if (totalAmount.compareTo(BigDecimal.ZERO) < 0) {
             totalAmount = BigDecimal.ZERO;
@@ -116,6 +117,7 @@ public class OrderService {
         order.setRemark(StringUtils.hasText(remark) ? remark.trim() : null);
         order.setPaymentMethod(StringUtils.hasText(paymentMethod) ? paymentMethod.trim() : null);
         order.setInvoiceTitle(StringUtils.hasText(invoiceTitle) ? invoiceTitle.trim() : null);
+        order.setInvoiceTaxNo(StringUtils.hasText(invoiceTaxNo) ? invoiceTaxNo.trim() : null);
         order.setCreateTime(LocalDateTime.now());
         orderMapper.insert(order);
         couponService.markCouponUsed(coupon);
@@ -127,20 +129,23 @@ public class OrderService {
                 throw new BusinessException(400, product.getName() + " 库存不足，请刷新后重试");
             }
 
-            BigDecimal itemTotal = product.getPrice().multiply(BigDecimal.valueOf(cart.getQuantity()));
+            BigDecimal itemPrice = effectivePrice(product);
+            BigDecimal itemTotal = itemPrice.multiply(BigDecimal.valueOf(cart.getQuantity()));
             OrderItem orderItem = new OrderItem();
             orderItem.setOrderId(order.getId());
             orderItem.setProductId(product.getId());
             orderItem.setProductName(product.getName());
             orderItem.setProductImage(product.getImageUrl());
+            orderItem.setProductSpec(cart.getProductSpec());
             orderItem.setQuantity(cart.getQuantity());
-            orderItem.setPrice(product.getPrice());
+            orderItem.setPrice(itemPrice);
             orderItem.setTotalAmount(itemTotal);
             orderItem.setCreateTime(LocalDateTime.now());
             orderItemMapper.insert(orderItem);
         }
 
         cartMapper.delete(wrapper);
+        messageService.create(user.getId(), "order", "订单创建成功", "订单 " + order.getOrderNo() + " 已创建，请及时完成支付。");
         return Result.success("订单创建成功", Map.of("orderId", order.getId(), "orderNo", order.getOrderNo()));
     }
 
@@ -191,6 +196,7 @@ public class OrderService {
         order.setStatus(1);
         order.setUpdateTime(LocalDateTime.now());
         orderMapper.updateById(order);
+        messageService.create(user.getId(), "order", "支付成功", "订单 " + order.getOrderNo() + " 已完成模拟支付，等待商家发货。");
         return Result.success("支付成功");
     }
 
@@ -213,6 +219,7 @@ public class OrderService {
         order.setUpdateTime(LocalDateTime.now());
         orderMapper.updateById(order);
         couponService.restoreCoupon(order.getCouponId(), user.getId());
+        messageService.create(user.getId(), "order", "订单已取消", "订单 " + order.getOrderNo() + " 已取消，库存和优惠券已恢复。");
         return Result.success("订单已取消");
     }
 
@@ -230,6 +237,8 @@ public class OrderService {
         order.setCompletedTime(LocalDateTime.now());
         order.setUpdateTime(LocalDateTime.now());
         orderMapper.updateById(order);
+        awardOrderPoints(user, order);
+        messageService.create(user.getId(), "order", "确认收货成功", "订单 " + order.getOrderNo() + " 已完成，积分已到账。");
         return Result.success("确认收货成功");
     }
 
@@ -263,6 +272,7 @@ public class OrderService {
         orderMap.put("remark", order.getRemark());
         orderMap.put("paymentMethod", order.getPaymentMethod());
         orderMap.put("invoiceTitle", order.getInvoiceTitle());
+        orderMap.put("invoiceTaxNo", order.getInvoiceTaxNo());
         orderMap.put("createTime", order.getCreateTime());
         orderMap.put("updateTime", order.getUpdateTime());
         orderMap.put("shippedTime", order.getShippedTime());
@@ -291,6 +301,56 @@ public class OrderService {
         QueryWrapper<OrderItem> itemWrapper = new QueryWrapper<>();
         itemWrapper.eq("order_id", orderId).orderByAsc("id");
         return orderItemMapper.selectList(itemWrapper);
+    }
+
+    private BigDecimal calculateShippingFee(BigDecimal originalAmount) {
+        if (originalAmount != null && originalAmount.compareTo(new BigDecimal("99")) >= 0) {
+            return BigDecimal.ZERO;
+        }
+        return new BigDecimal("8.00");
+    }
+
+    private BigDecimal effectivePrice(Product product) {
+        return isPromotionActive(product) && product.getPromotionPrice() != null
+                ? product.getPromotionPrice()
+                : product.getPrice();
+    }
+
+    private boolean isPromotionActive(Product product) {
+        if (product == null || product.getPromotionPrice() == null) {
+            return false;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        return (product.getPromotionStartTime() == null || !product.getPromotionStartTime().isAfter(now))
+                && (product.getPromotionEndTime() == null || !product.getPromotionEndTime().isBefore(now));
+    }
+
+    public void awardOrderPoints(User user, Order order) {
+        if (user == null || order == null || order.getTotalAmount() == null) {
+            return;
+        }
+        int points = order.getTotalAmount().max(BigDecimal.ZERO).intValue();
+        if (points <= 0) {
+            return;
+        }
+        user.setPoints((user.getPoints() == null ? 0 : user.getPoints()) + points);
+        user.setLevel(resolveLevel(user.getPoints()));
+        user.setUpdateTime(LocalDateTime.now());
+        userMapper.updateById(user);
+    }
+
+    private String resolveLevel(Integer points) {
+        int value = points == null ? 0 : points;
+        if (value >= 10000) {
+            return "钻石会员";
+        }
+        if (value >= 5000) {
+            return "黄金会员";
+        }
+        if (value >= 1000) {
+            return "白银会员";
+        }
+        return "普通会员";
     }
 
     private User getCurrentUser() {

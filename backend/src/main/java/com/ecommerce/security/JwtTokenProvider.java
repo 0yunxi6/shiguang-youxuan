@@ -65,6 +65,10 @@ public class JwtTokenProvider {
         return getClaims(token).getSubject();
     }
 
+    public long getExpirationMillis(String token) {
+        return getClaims(token).getExpiration().getTime();
+    }
+
     public boolean validateToken(String token, UserDetails userDetails) {
         try {
             String username = getUsernameFromToken(token);

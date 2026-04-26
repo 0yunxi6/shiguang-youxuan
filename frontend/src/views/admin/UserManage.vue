@@ -22,6 +22,8 @@
       <select v-model="roleFilter" class="filter-select" @change="loadUsers">
         <option :value="null">全部角色</option>
         <option value="ADMIN">管理员</option>
+        <option value="OPERATOR">运营</option>
+        <option value="SUPPORT">客服</option>
         <option value="USER">普通用户</option>
       </select>
       <select v-model="statusFilter" class="filter-select" @change="loadUsers">
@@ -68,14 +70,15 @@
               </div>
             </td>
             <td>
-              <span class="tag" :class="row.role === 'ADMIN' ? 'tag-purple' : 'tag-gray'">
-                {{ row.role === 'ADMIN' ? '管理员' : '用户' }}
-              </span>
+              <select class="role-select" v-model="row.role" @change="changeRole(row)">
+                <option v-for="role in roleOptions" :key="role.value" :value="role.value">{{ role.label }}</option>
+              </select>
             </td>
             <td>
               <span class="tag" :class="row.status === 1 ? 'tag-green' : 'tag-red'">
                 {{ row.status === 1 ? '正常' : '禁用' }}
               </span>
+              <small v-if="row.statusReason" class="status-reason">{{ row.statusReason }}</small>
             </td>
             <td class="time">{{ formatTime(row.createTime) }}</td>
             <td class="actions">
@@ -150,7 +153,7 @@ import { ref, onMounted } from 'vue'
 import request from '../../utils/request'
 import { useVisiblePages } from '../../composables/usePagination'
 import { formatTime } from '../../composables/useFormatTime'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Message, Phone, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import UserAvatar from '../../components/UserAvatar.vue'
 import EmptyState from '../../components/admin/EmptyState.vue'
@@ -164,6 +167,12 @@ const statusFilter = ref(null)
 const page = ref(1)
 const pageSize = 10
 const total = ref(0)
+const roleOptions = [
+  { value: 'USER', label: '普通用户' },
+  { value: 'SUPPORT', label: '客服' },
+  { value: 'OPERATOR', label: '运营' },
+  { value: 'ADMIN', label: '管理员' }
+]
 
 const deleteVisible = ref(false)
 const deleteTarget = ref(null)
@@ -196,13 +205,34 @@ const loadUsers = async () => {
 const toggleStatus = async (row) => {
   if (row.role === 'ADMIN') return
   try {
+    let reason = ''
+    if (row.status === 1) {
+      const res = await ElMessageBox.prompt('请输入禁用原因', '禁用用户', {
+        confirmButtonText: '确认禁用',
+        cancelButtonText: '取消',
+        inputPlaceholder: '例如：异常下单 / 违规操作',
+        inputValue: row.statusReason || '后台禁用'
+      })
+      reason = res.value
+    }
     await request.put(`/admin/users/${row.id}/status`, null, {
-      params: { status: row.status === 1 ? 0 : 1 }
+      params: { status: row.status === 1 ? 0 : 1, reason }
     })
     row.status = row.status === 1 ? 0 : 1
+    row.statusReason = row.status === 1 ? null : reason
     ElMessage.success(row.status === 1 ? '已启用' : '已禁用')
   } catch (e) {
-    console.error(e)
+    if (e !== 'cancel') console.error(e)
+  }
+}
+
+const changeRole = async (row) => {
+  try {
+    await request.put(`/admin/users/${row.id}/role`, null, { params: { role: row.role } })
+    ElMessage.success('角色已更新')
+  } catch (e) {
+    ElMessage.error('角色更新失败')
+    loadUsers()
   }
 }
 
@@ -419,6 +449,25 @@ onMounted(() => {
 .tag-gray { background: #f0f0f0; color: #909399; }
 .tag-red { background: #fde8e8; color: #f56c6c; }
 .tag-purple { background: #fdf0ec; color: #c45c3e; }
+
+.role-select {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: #fff;
+  color: #444;
+  max-width: 96px;
+}
+
+.status-reason {
+  display: block;
+  margin-top: 6px;
+  color: #999;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .time {
   font-size: 13px;

@@ -4,10 +4,14 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.ecommerce.entity.Order;
 import com.ecommerce.entity.OrderItem;
+import com.ecommerce.entity.User;
 import com.ecommerce.mapper.OrderItemMapper;
 import com.ecommerce.mapper.OrderMapper;
 import com.ecommerce.mapper.ProductMapper;
+import com.ecommerce.mapper.UserMapper;
 import com.ecommerce.service.CouponService;
+import com.ecommerce.service.MessageService;
+import com.ecommerce.service.OrderService;
 import com.ecommerce.util.Result;
 import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +32,10 @@ public class AdminOrderController {
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
     private final ProductMapper productMapper;
+    private final UserMapper userMapper;
     private final CouponService couponService;
+    private final MessageService messageService;
+    private final OrderService orderService;
 
     @GetMapping
     public Result<?> list(@RequestParam(defaultValue = "1") int page,
@@ -162,6 +169,7 @@ public class AdminOrderController {
         }
         order.setUpdateTime(LocalDateTime.now());
         orderMapper.updateById(order);
+        notifyStatusChange(order, targetStatus);
         return true;
     }
 
@@ -173,5 +181,20 @@ public class AdminOrderController {
             productMapper.increaseStock(item.getProductId(), item.getQuantity());
         }
         couponService.restoreCoupon(order.getCouponId(), order.getUserId());
+    }
+
+    private void notifyStatusChange(Order order, Integer targetStatus) {
+        if (order == null || order.getUserId() == null) {
+            return;
+        }
+        if (targetStatus == 2) {
+            messageService.create(order.getUserId(), "order", "订单已发货", "订单 " + order.getOrderNo() + " 已发货，请留意收货。");
+        } else if (targetStatus == 3) {
+            User user = userMapper.selectById(order.getUserId());
+            orderService.awardOrderPoints(user, order);
+            messageService.create(order.getUserId(), "order", "订单已完成", "订单 " + order.getOrderNo() + " 已完成，积分已到账。");
+        } else if (targetStatus == 4) {
+            messageService.create(order.getUserId(), "order", "订单已取消", "订单 " + order.getOrderNo() + " 已由后台取消。");
+        }
     }
 }

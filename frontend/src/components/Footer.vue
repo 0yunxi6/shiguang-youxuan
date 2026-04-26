@@ -5,7 +5,7 @@
         <div class="footer-brand">
           <div class="footer-logo">
             <span class="logo-icon">拾</span>
-            <span class="logo-text">拾光优选</span>
+            <span class="logo-text">拾光</span>
           </div>
           <p class="brand-desc">拾取美好，优选生活</p>
         </div>
@@ -37,7 +37,7 @@
         </div>
       </div>
       <div class="footer-bottom">
-        <p>&copy; 2026 拾光优选. All rights reserved.</p>
+        <p>&copy; 2026 拾光. All rights reserved.</p>
         <div class="footer-badges">
           <span class="badge">安全支付</span>
           <span class="sep">·</span>
