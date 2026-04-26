@@ -11,6 +11,7 @@ export const forgotPasswordReset = (data) => postJson('/auth/forgot-password/res
 
 // ========== AI Customer Service ==========
 export const chatWithAi = (data) => postJson('/ai/chat', data)
+export const getAiContext = () => request.get('/ai/context')
 
 // ========== Products ==========
 export const getProductList = (params) => request.get('/products', { params })

@@ -4,13 +4,18 @@
       <div class="brand-block" @click="router.push('/')">
         <img src="/logo.png" alt="拾光 Logo" />
         <div>
-          <strong>拾光商城</strong>
+          <strong>拾光</strong>
           <span>AI 客服工作台</span>
         </div>
       </div>
 
       <nav class="side-menu">
-        <button v-for="item in menuItems" :key="item.key" :class="{ active: item.key === 'chat' }">
+        <button
+          v-for="item in menuItems"
+          :key="item.key"
+          :class="{ active: activeMenu === item.key }"
+          @click="setActiveMenu(item.key)"
+        >
           <span class="menu-icon">{{ item.icon }}</span>
           <span>{{ item.label }}</span>
         </button>
@@ -23,7 +28,7 @@
           <small>GLM-5.1 / 本地兜底双通道</small>
         </div>
       </div>
-      <button class="back-home" @click="router.push('/')">返回商城</button>
+      <button class="back-home" @click="router.push('/')">返回拾光</button>
     </aside>
 
     <section class="conversation-list">
@@ -77,7 +82,7 @@
           <div>
             <h1>{{ displayName }}</h1>
             <p>
-              来源：拾光商城 · AI 咨询
+              来源：拾光 · AI 咨询
               <span class="divider"></span>
               会话 ID：{{ sessionNo }}
             </p>
@@ -94,6 +99,7 @@
         </div>
       </header>
 
+      <template v-if="activeMenu === 'chat'">
       <section ref="messageListRef" class="message-list">
         <div class="day-divider">今天 {{ todayText }}</div>
         <div
@@ -162,6 +168,119 @@
           </div>
         </div>
       </footer>
+      </template>
+
+      <section v-else class="module-panel">
+        <div class="module-hero">
+          <span>{{ activeMenuMeta.icon }}</span>
+          <div>
+            <h2>{{ activeMenuMeta.label }}</h2>
+            <p>{{ activeMenuMeta.desc }}</p>
+          </div>
+        </div>
+
+        <div v-if="activeMenu === 'orders'" class="module-grid">
+          <article v-for="order in recentOrders" :key="order.id" class="module-card">
+            <div class="module-card-head">
+              <h3>{{ order.orderNo }}</h3>
+              <em>{{ orderStatusText(order.status) }}</em>
+            </div>
+            <p>商品：{{ orderItemsText(order.items) }}</p>
+            <p>实付：¥{{ formatAmount(order.totalAmount) }}　下单：{{ formatDateTime(order.createTime) }}</p>
+            <div class="module-actions">
+              <button @click="askOrder(order)">AI 查询订单</button>
+              <button @click="askLogistics(order)">物流进度</button>
+              <button @click="router.push('/order')">打开订单页</button>
+            </div>
+          </article>
+          <div v-if="!recentOrders.length" class="module-empty">暂无订单，去首页下单后这里会自动展示。</div>
+        </div>
+
+        <div v-if="activeMenu === 'goods'" class="module-grid product-grid">
+          <article v-for="product in recommendedProducts" :key="product.id" class="module-card product-module-card">
+            <img :src="product.imageUrl || '/placeholder.svg'" alt="" />
+            <div>
+              <h3>{{ product.name }}</h3>
+              <p>{{ product.brand || '拾光精选' }} · 库存 {{ product.stock ?? 0 }}</p>
+              <strong>¥{{ formatAmount(product.effectivePrice || product.promotionPrice || product.price) }}</strong>
+              <div class="module-actions">
+                <button @click="router.push(`/product/${product.id}`)">查看商品</button>
+                <button @click="sendQuick(`帮我介绍一下商品：${product.name}`)">AI 介绍</button>
+              </div>
+            </div>
+          </article>
+          <div v-if="!recommendedProducts.length" class="module-empty">暂无推荐商品，可先去首页浏览。</div>
+        </div>
+
+        <div v-if="activeMenu === 'afterSales'" class="module-grid">
+          <article v-for="item in afterSales" :key="item.id" class="module-card">
+            <div class="module-card-head">
+              <h3>{{ item.orderNo }}</h3>
+              <em>{{ afterSaleStatusText(item.status) }}</em>
+            </div>
+            <p>类型：{{ afterSaleTypeText(item.type) }}　金额：¥{{ formatAmount(item.amount) }}</p>
+            <p>原因：{{ item.reason }}</p>
+            <p v-if="item.auditRemark">处理备注：{{ item.auditRemark }}</p>
+            <div class="module-actions">
+              <button @click="sendQuick(`帮我查看订单 ${item.orderNo} 的售后进度`)">AI 查询进度</button>
+              <button @click="router.push('/profile?tab=afterSales')">售后进度页</button>
+            </div>
+          </article>
+          <article v-if="!afterSales.length" class="module-card">
+            <h3>暂无售后记录</h3>
+            <p>如商品需要退款、退货或换货，可从订单页发起售后申请。</p>
+            <div class="module-actions">
+              <button @click="recentOrder ? sendQuick(`我想申请订单 ${recentOrder.orderNo} 的售后`) : router.push('/order')">申请最近订单售后</button>
+            </div>
+          </article>
+        </div>
+
+        <div v-if="activeMenu === 'customers'" class="module-grid">
+          <article class="module-card profile-module-card">
+            <UserAvatar :src="userProfile?.avatar" :name="displayName" :size="72" />
+            <div>
+              <h3>{{ displayName }}</h3>
+              <p>会员：{{ userProfile?.level || '普通会员' }}　积分：{{ userProfile?.points || 0 }}</p>
+              <p>手机：{{ maskPhone(userProfile?.phone) }}　邮箱：{{ userProfile?.email || '未设置' }}</p>
+              <p>最近地址：{{ latestAddress }}</p>
+              <div class="module-actions">
+                <button @click="router.push('/profile')">个人中心</button>
+                <button @click="router.push('/profile?tab=messages')">消息中心</button>
+                <button @click="sendQuick('帮我检查一下账号安全和会员权益')">AI 账号建议</button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div v-if="activeMenu === 'stats'" class="stats-grid">
+          <div class="stat-card"><strong>{{ recentOrders.length }}</strong><span>最近订单</span></div>
+          <div class="stat-card"><strong>{{ pendingOrderCount }}</strong><span>待处理订单</span></div>
+          <div class="stat-card"><strong>{{ availableCouponCount }}</strong><span>可用优惠券</span></div>
+          <div class="stat-card"><strong>{{ afterSales.length }}</strong><span>售后记录</span></div>
+          <div class="stat-card"><strong>{{ recommendedProducts.length }}</strong><span>推荐商品</span></div>
+          <div class="stat-card"><strong>{{ userProfile?.points || 0 }}</strong><span>会员积分</span></div>
+        </div>
+
+        <div v-if="activeMenu === 'settings'" class="module-grid">
+          <article class="module-card">
+            <h3>客服设置</h3>
+            <p>AI 模型：GLM-5.1；后端已启用本地兜底，接口异常时仍可回复常见问题。</p>
+            <label class="setting-line">
+              <span>消息提示音</span>
+              <el-switch v-model="soundEnabled" />
+            </label>
+            <label class="setting-line">
+              <span>优先使用订单上下文</span>
+              <el-switch :model-value="true" disabled />
+            </label>
+            <div class="module-actions">
+              <button @click="copyConversation">复制当前会话</button>
+              <button @click="resetConversation">清空会话</button>
+              <button @click="sendQuick('请总结一下当前账号的订单、优惠券和售后状态')">AI 总结</button>
+            </div>
+          </article>
+        </div>
+      </section>
     </main>
 
     <aside class="customer-panel">
@@ -249,7 +368,7 @@ import {
   Location,
   Service
 } from '@element-plus/icons-vue'
-import { chatWithAi, getOrderList, getUserProfile } from '../api'
+import { chatWithAi, getAfterSales, getCoupons, getOrderList, getProductList, getUserProfile } from '../api'
 import UserAvatar from '../components/UserAvatar.vue'
 
 const router = useRouter()
@@ -259,20 +378,24 @@ const selectedSessionId = ref(1)
 const inputText = ref('')
 const sending = ref(false)
 const soundEnabled = ref(true)
+const activeMenu = ref('chat')
 const userProfile = ref(null)
 const recentOrders = ref([])
+const coupons = ref([])
+const afterSales = ref([])
+const recommendedProducts = ref([])
 const messagesEndRef = ref(null)
 const messageListRef = ref(null)
 const sessionNo = `SG${new Date().getFullYear()}${String(Date.now()).slice(-8)}`
 
 const menuItems = [
-  { key: 'chat', label: '会话', icon: '💬' },
-  { key: 'orders', label: '订单查询', icon: '📋' },
-  { key: 'goods', label: '商品查询', icon: '🛍️' },
-  { key: 'afterSales', label: '售后处理', icon: '🔁' },
-  { key: 'customers', label: '客户管理', icon: '👥' },
-  { key: 'stats', label: '数据统计', icon: '📊' },
-  { key: 'settings', label: '系统设置', icon: '⚙️' }
+  { key: 'chat', label: '会话', icon: '💬', desc: '继续与 AI 小光沟通' },
+  { key: 'orders', label: '订单查询', icon: '📋', desc: '查看当前账号最近订单、金额和状态' },
+  { key: 'goods', label: '商品查询', icon: '🛍️', desc: '展示可推荐商品并跳转详情' },
+  { key: 'afterSales', label: '售后处理', icon: '🔁', desc: '查看售后记录或引导发起申请' },
+  { key: 'customers', label: '客户管理', icon: '👥', desc: '查看账号、会员、积分和联系方式' },
+  { key: 'stats', label: '数据统计', icon: '📊', desc: '汇总订单、优惠券、售后和积分' },
+  { key: 'settings', label: '系统设置', icon: '⚙️', desc: '管理客服会话和 AI 兜底设置' }
 ]
 
 const sessionTabs = [
@@ -328,6 +451,9 @@ const filteredSessions = computed(() => {
 const recentOrder = computed(() => recentOrders.value[0] || null)
 const previewOrderItems = computed(() => (recentOrder.value?.items || []).slice(0, 2))
 const latestAddress = computed(() => recentOrder.value?.receiverAddress || '暂未读取到地址')
+const activeMenuMeta = computed(() => menuItems.find(item => item.key === activeMenu.value) || menuItems[0])
+const pendingOrderCount = computed(() => recentOrders.value.filter(order => [0, 1, 2].includes(Number(order.status))).length)
+const availableCouponCount = computed(() => coupons.value.filter(coupon => Number(coupon.status) === 0).length)
 
 const stateText = (state) => ({ active: '接待中', waiting: '等待中', done: '已结束' }[state] || '接待中')
 const orderStatusText = (status) => ({
@@ -337,6 +463,17 @@ const orderStatusText = (status) => ({
   3: '已完成',
   4: '已取消'
 }[status] || '未知')
+const afterSaleStatusText = (status) => ({
+  0: '待审核',
+  1: '已同意',
+  2: '已拒绝',
+  3: '已完成'
+}[status] || '待审核')
+const afterSaleTypeText = (type) => ({
+  refund: '退款',
+  return: '退货',
+  exchange: '换货'
+}[type] || '退款')
 
 function formatClock(date) {
   return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
@@ -347,6 +484,19 @@ function formatDate(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
   return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+}
+
+function formatDateTime(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(date)
 }
 
 function formatAmount(value) {
@@ -365,6 +515,18 @@ function scrollToBottom() {
   nextTick(() => {
     messagesEndRef.value?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   })
+}
+
+function orderItemsText(items = []) {
+  if (!items.length) return '暂无商品明细'
+  return items.map(item => `${item.productName || '商品'}×${item.quantity || 1}`).join('、')
+}
+
+function setActiveMenu(key) {
+  activeMenu.value = key
+  if (key === 'chat') {
+    scrollToBottom()
+  }
 }
 
 async function loadContext() {
@@ -386,7 +548,28 @@ async function loadContext() {
     const orderRes = await getOrderList()
     const payload = orderRes.data
     const list = Array.isArray(payload?.records) ? payload.records : (Array.isArray(payload) ? payload : [])
-    recentOrders.value = list.slice(0, 3)
+    recentOrders.value = list.slice(0, 8)
+  } catch (error) {
+    console.error(error)
+  }
+
+  try {
+    const couponRes = await getCoupons()
+    coupons.value = Array.isArray(couponRes.data) ? couponRes.data : []
+  } catch (error) {
+    console.error(error)
+  }
+
+  try {
+    const afterSaleRes = await getAfterSales()
+    afterSales.value = Array.isArray(afterSaleRes.data) ? afterSaleRes.data : []
+  } catch (error) {
+    console.error(error)
+  }
+
+  try {
+    const productRes = await getProductList({ page: 1, size: 8, sort: 'sales' })
+    recommendedProducts.value = productRes.data?.records || []
   } catch (error) {
     console.error(error)
   }
@@ -404,8 +587,19 @@ function appendMessage(role, content, extra = {}) {
 }
 
 function sendQuick(text) {
+  activeMenu.value = 'chat'
   inputText.value = text
   sendMessage()
+}
+
+function askOrder(order) {
+  if (!order?.orderNo) return
+  sendQuick(`帮我查看订单 ${order.orderNo}`)
+}
+
+function askLogistics(order) {
+  if (!order?.orderNo) return
+  sendQuick(`帮我查询订单 ${order.orderNo} 的物流进度`)
 }
 
 async function sendMessage() {
@@ -436,6 +630,17 @@ function transferHuman() {
 function endConversation() {
   appendMessage('assistant', '本次会话已结束。后续仍可继续输入问题，我会重新为你接待。')
   ElMessage.success('会话已标记结束')
+}
+
+function resetConversation() {
+  messages.value = [{
+    id: Date.now(),
+    role: 'assistant',
+    content: '会话已清空。我是拾光 AI 客服小光，可以继续帮你查询订单、物流、优惠券、售后、发票和商品推荐。',
+    time: formatClock(new Date())
+  }]
+  activeMenu.value = 'chat'
+  scrollToBottom()
 }
 
 function handleQuickAction(action) {
@@ -1194,6 +1399,181 @@ onMounted(() => {
   color: #8a97ad;
   background: #f8fafd;
   border-radius: 10px;
+}
+
+.module-panel {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px;
+  background: linear-gradient(180deg, #f7faff 0%, #fff 42%);
+}
+
+.module-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid #e1e9f5;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
+  margin-bottom: 18px;
+}
+
+.module-hero > span {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: #edf5ff;
+  font-size: 24px;
+}
+
+.module-hero h2 {
+  font-size: 22px;
+  margin-bottom: 6px;
+}
+
+.module-hero p,
+.module-card p {
+  color: #64748b;
+  line-height: 1.7;
+}
+
+.module-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.module-card {
+  padding: 18px;
+  border: 1px solid #e1e9f5;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+}
+
+.module-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.module-card h3 {
+  font-size: 17px;
+  word-break: break-all;
+}
+
+.module-card em {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #fff4e8;
+  color: #f97316;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.module-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.module-actions button {
+  min-height: 34px;
+  border: 1px solid #cfe0f7;
+  border-radius: 8px;
+  background: #fff;
+  color: #1664ff;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.module-actions button:hover {
+  background: #edf5ff;
+}
+
+.product-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.product-module-card {
+  display: grid;
+  grid-template-columns: 86px 1fr;
+  gap: 14px;
+}
+
+.product-module-card img {
+  width: 86px;
+  height: 86px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #f5f7fb;
+}
+
+.product-module-card strong {
+  display: block;
+  margin-top: 6px;
+  color: #ff5a1f;
+  font-size: 18px;
+}
+
+.profile-module-card {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.stat-card {
+  min-height: 118px;
+  border: 1px solid #e1e9f5;
+  border-radius: 16px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.05);
+}
+
+.stat-card strong {
+  color: #1664ff;
+  font-size: 34px;
+}
+
+.stat-card span {
+  color: #64748b;
+  margin-top: 6px;
+}
+
+.setting-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14px;
+  padding: 12px 0;
+  border-top: 1px solid #eef2f7;
+}
+
+.module-empty {
+  padding: 34px 20px;
+  border: 1px dashed #cfe0f7;
+  border-radius: 14px;
+  text-align: center;
+  color: #64748b;
+  background: #fff;
 }
 
 @media (max-width: 1280px) {
